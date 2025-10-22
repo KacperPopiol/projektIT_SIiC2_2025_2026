@@ -30,15 +30,80 @@ module.exports = io => {
 		socket.join(`user:${socket.userId}`)
 
 		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
+		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
 		socket.on('send_private_message', async data => {
 			try {
 				const { conversationId, content } = data
 
-				// Zapisz wiadomość do bazy danych
+				// Walidacja danych
+				if (!conversationId || !content?.trim()) {
+					socket.emit('error', {
+						message: 'Brak wymaganych danych (conversationId lub content)',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				// ✅ SPRAWDŹ CZY KONWERSACJA ISTNIEJE I CZY TO PRIVATE
+				const conversation = await db.Conversation.findByPk(conversationId)
+
+				if (!conversation) {
+					socket.emit('error', {
+						message: 'Konwersacja nie znaleziona',
+						code: 'NOT_FOUND',
+					})
+					return
+				}
+
+				// ✅ JEŚLI PRIVATE - SPRAWDŹ CZY SĄ ZNAJOMYMI
+				if (conversation.conversation_type === 'private') {
+					// Znajdź wszystkich uczestników
+					const participants = await db.ConversationParticipant.findAll({
+						where: { conversation_id: conversationId },
+						attributes: ['user_id'],
+					})
+
+					// Znajdź drugiego użytkownika (nie siebie)
+					const otherParticipant = participants.find(p => p.user_id !== socket.userId)
+
+					if (!otherParticipant) {
+						socket.emit('error', {
+							message: 'Odbiorca nie znaleziony w konwersacji',
+							code: 'RECIPIENT_NOT_FOUND',
+						})
+						return
+					}
+
+					const otherUserId = otherParticipant.user_id
+
+					// ✅ SPRAWDŹ CZY ISTNIEJE ZAAKCEPTOWANA ZNAJOMOŚĆ
+					const { Op } = require('sequelize')
+
+					const friendship = await db.Contact.findOne({
+						where: {
+							status: 'accepted',
+							[Op.or]: [
+								{ user_id: socket.userId, contact_user_id: otherUserId },
+								{ user_id: otherUserId, contact_user_id: socket.userId },
+							],
+						},
+					})
+
+					if (!friendship) {
+						socket.emit('error', {
+							message:
+								'Nie możesz wysłać wiadomości - musicie być znajomymi. Dodaj tę osobę ponownie w zakładce "Znajomi".',
+							code: 'NOT_FRIENDS',
+						})
+						return
+					}
+				}
+
+				// ✅ JEŚLI WSZYSTKO OK - ZAPISZ WIADOMOŚĆ
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content,
+					content: content.trim(),
 				})
 
 				// Pobierz uczestników konwersacji
@@ -63,16 +128,25 @@ module.exports = io => {
 					conversationId,
 					senderId: socket.userId,
 					senderUsername: socket.username,
-					content,
+					content: content.trim(),
 					createdAt: message.created_at,
 				}
 
 				participants.forEach(participant => {
 					io.to(`user:${participant.user_id}`).emit('new_private_message', messageData)
 				})
+
+				// ✅ POTWIERDŹ NADAWCY ŻE WYSŁANO
+				socket.emit('message_sent', {
+					success: true,
+					message: messageData,
+				})
 			} catch (error) {
 				console.error('❌ Błąd wysyłania wiadomości prywatnej:', error)
-				socket.emit('error', { message: 'Nie udało się wysłać wiadomości' })
+				socket.emit('error', {
+					message: 'Nie udało się wysłać wiadomości',
+					code: 'SERVER_ERROR',
+				})
 			}
 		})
 

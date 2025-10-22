@@ -50,4 +50,8 @@ export const contactsApi = {
 		const response = await axiosInstance.get(`/contacts/search?username=${username}`)
 		return response.data
 	},
+	deleteContact: async contactId => {
+		const response = await axiosInstance.delete(`/contacts/${contactId}`)
+		return response.data
+	},
 }

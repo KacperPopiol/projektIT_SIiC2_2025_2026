@@ -104,6 +104,41 @@ const ChatPage = () => {
 		}
 	}
 
+	// const getUnreadCount = conversation => {
+	// 	if (!conversation?.messages) return 0
+
+	// 	return conversation.messages.filter(msg => {
+	// 		// Sprawdź czy wiadomość nie jest nasza
+	// 		if (msg.sender_id === user?.userId) return false
+
+	// 		// Sprawdź czy jest przeczytana przez nas
+	// 		const isRead = msg.readStatuses?.some(status => status.user_id === user?.userId && status.is_read)
+
+	// 		return !isRead
+	// 	}).length
+	// }
+
+	const getUnreadCount = conversation => {
+		if (!conversation?.messages || !user) return 0
+
+		return conversation.messages.filter(msg => {
+			// Sprawdź czy wiadomość NIE jest nasza
+			if (msg.sender_id === user.userId) return false
+
+			// Sprawdź czy mamy status odczytania
+			if (!msg.readStatuses || msg.readStatuses.length === 0) {
+				// Brak statusów = nowa wiadomość = nieprzeczytana
+				return true
+			}
+
+			// Sprawdź czy JA przeczytałem tę wiadomość
+			const myReadStatus = msg.readStatuses.find(status => status.user_id === user.userId)
+
+			// Jeśli nie ma mojego statusu LUB status = false
+			return !myReadStatus || !myReadStatus.is_read
+		}).length
+	}
+
 	// Jeśli ładowanie, pokaż spinner
 	if (loading) {
 		return (
@@ -542,9 +577,52 @@ const ChatPage = () => {
 													}}>
 													{!otherUser?.avatar_url && (otherUser?.username?.charAt(0).toUpperCase() || '?')}
 												</div>
-												<div style={{ flex: 1, minWidth: 0 }}>
+												{/* <div style={{ flex: 1, minWidth: 0 }}>
 													<div style={{ fontWeight: 'bold', fontSize: '14px' }}>
 														{otherUser?.username || 'Użytkownik'}
+													</div>
+													{lastMessage && (
+														<div
+															style={{
+																fontSize: '12px',
+																opacity: 0.8,
+																marginTop: '3px',
+																overflow: 'hidden',
+																textOverflow: 'ellipsis',
+																whiteSpace: 'nowrap',
+															}}>
+															{lastMessage.content}
+														</div>
+													)}
+												</div> */}
+												<div style={{ flex: 1, minWidth: 0 }}>
+													<div
+														style={{
+															fontWeight: 'bold',
+															fontSize: '14px',
+															display: 'flex',
+															alignItems: 'center',
+															gap: '8px',
+														}}>
+														<span>{otherUser?.username || 'Użytkownik'}</span>
+														{(() => {
+															const unreadCount = getUnreadCount(conv.conversation)
+															return unreadCount > 0 ? (
+																<span
+																	style={{
+																		backgroundColor: '#dc3545',
+																		color: 'white',
+																		fontSize: '11px',
+																		fontWeight: 'bold',
+																		padding: '2px 6px',
+																		borderRadius: '10px',
+																		minWidth: '20px',
+																		textAlign: 'center',
+																	}}>
+																	{unreadCount}
+																</span>
+															) : null
+														})()}
 													</div>
 													{lastMessage && (
 														<div

@@ -416,3 +416,82 @@ exports.searchContact = async (req, res) => {
 		})
 	}
 }
+
+exports.deleteContact = async (req, res) => {
+	try {
+		const userId = req.user.userId
+		const { contactId } = req.params
+
+		// Znajdź kontakt (zaakceptowany znajomy)
+		const contact = await db.Contact.findOne({
+			where: {
+				contact_id: contactId,
+				status: 'accepted',
+				[Op.or]: [{ user_id: userId }, { contact_user_id: userId }],
+			},
+		})
+
+		if (!contact) {
+			return res.status(404).json({
+				success: false,
+				error: 'Znajomy nie został znaleziony lub nie jest zaakceptowany',
+			})
+		}
+
+		// ✅ NOWE: Znajdź konwersację między tymi użytkownikami
+		const otherUserId = contact.user_id === userId ? contact.contact_user_id : contact.user_id
+
+		// Znajdź wspólną konwersację
+		const participant1 = await db.ConversationParticipant.findOne({
+			where: { user_id: userId },
+		})
+
+		if (participant1) {
+			// Sprawdź czy druga osoba też jest w tej konwersacji
+			const participant2 = await db.ConversationParticipant.findOne({
+				where: {
+					conversation_id: participant1.conversation_id,
+					user_id: otherUserId,
+				},
+			})
+
+			if (participant2) {
+				// Sprawdź czy to konwersacja prywatna (2 osoby)
+				const participantsCount = await db.ConversationParticipant.count({
+					where: { conversation_id: participant1.conversation_id },
+				})
+
+				if (participantsCount === 2) {
+					// Zarchiwizuj konwersację dla usuwającego
+					await participant1.update({
+						is_archived: true,
+						archived_at: new Date(),
+					})
+
+					console.log(`✅ Zarchiwizowano konwersację ${participant1.conversation_id} dla użytkownika ${userId}`)
+				}
+			}
+		}
+
+		// Usuń oba wpisy kontaktów (dwustronnie)
+		await db.Contact.destroy({
+			where: {
+				[Op.or]: [
+					{ user_id: userId, contact_user_id: otherUserId },
+					{ user_id: otherUserId, contact_user_id: userId },
+				],
+			},
+		})
+
+		res.json({
+			success: true,
+			message: 'Znajomy został usunięty i konwersacja zarchiwizowana',
+		})
+	} catch (error) {
+		console.error('❌ Błąd usuwania znajomego:', error)
+		res.status(500).json({
+			success: false,
+			error: 'Wystąpił błąd podczas usuwania znajomego',
+		})
+	}
+}

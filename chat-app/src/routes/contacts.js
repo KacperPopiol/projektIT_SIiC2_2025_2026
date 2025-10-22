@@ -25,4 +25,9 @@ router.get('/sent', contactController.getSentInvitations)
 // Wyszukiwanie znajomego
 router.get('/search', contactController.searchContact)
 
+
+
+router.delete('/:contactId', contactController.deleteContact);
+
+
 module.exports = router

@@ -20,6 +20,8 @@ const GroupsPage = () => {
 
 	const [generatedCode, setGeneratedCode] = useState('')
 	const [showGeneratedCode, setShowGeneratedCode] = useState(false)
+	const [editingGroupName, setEditingGroupName] = useState(false)
+	const [newGroupName, setNewGroupName] = useState('')
 
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
@@ -185,6 +187,30 @@ const GroupsPage = () => {
 			loadGroups()
 		} catch (err) {
 			alert('Błąd usuwania grupy')
+		}
+	}
+
+	const handleUpdateGroupName = async (groupId, newName) => {
+		if (!newName.trim()) {
+			alert('Nazwa nie może być pusta')
+			return
+		}
+
+		try {
+			await groupsApi.updateGroupName(groupId, newName)
+
+			// Odśwież dane
+			await loadGroups()
+
+			// Zaktualizuj wybraną grupę
+			setSelectedGroup(prev => ({
+				...prev,
+				group_name: newName,
+			}))
+
+			alert('Nazwa grupy zaktualizowana!')
+		} catch (err) {
+			alert('Błąd zmiany nazwy: ' + (err.response?.data?.error || err.message))
 		}
 	}
 
@@ -370,7 +396,80 @@ const GroupsPage = () => {
 			<div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
 				{selectedGroup ? (
 					<>
-						<h2>{selectedGroup.group_name}</h2>
+						{/* <h2>{selectedGroup.group_name}</h2> */}
+						{editingGroupName ? (
+							<div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+								<input
+									type='text'
+									value={newGroupName}
+									onChange={e => setNewGroupName(e.target.value)}
+									placeholder='Nowa nazwa grupy'
+									style={{
+										flex: 1,
+										padding: '10px',
+										borderRadius: '5px',
+										border: '1px solid #ddd',
+										fontSize: '16px',
+									}}
+									autoFocus
+								/>
+								<button
+									onClick={async () => {
+										if (newGroupName.trim()) {
+											await handleUpdateGroupName(selectedGroup.group_id, newGroupName)
+											setEditingGroupName(false)
+											setNewGroupName('')
+										}
+									}}
+									style={{
+										padding: '10px 20px',
+										backgroundColor: '#28a745',
+										color: 'white',
+										border: 'none',
+										borderRadius: '5px',
+										cursor: 'pointer',
+									}}>
+									✓ Zapisz
+								</button>
+								<button
+									onClick={() => {
+										setEditingGroupName(false)
+										setNewGroupName('')
+									}}
+									style={{
+										padding: '10px 20px',
+										backgroundColor: '#6c757d',
+										color: 'white',
+										border: 'none',
+										borderRadius: '5px',
+										cursor: 'pointer',
+									}}>
+									✕ Anuluj
+								</button>
+							</div>
+						) : (
+							<div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+								<h2 style={{ margin: 0 }}>{selectedGroup.group_name}</h2>
+								{isGroupCreator(selectedGroup.group_id) && (
+									<button
+										onClick={() => {
+											setNewGroupName(selectedGroup.group_name)
+											setEditingGroupName(true)
+										}}
+										style={{
+											padding: '6px 12px',
+											backgroundColor: '#17a2b8',
+											color: 'white',
+											border: 'none',
+											borderRadius: '5px',
+											cursor: 'pointer',
+											fontSize: '13px',
+										}}>
+										✏️ Zmień nazwę
+									</button>
+								)}
+							</div>
+						)}
 
 						{/* Kod zaproszeniowy */}
 						{showGeneratedCode && generatedCode && (

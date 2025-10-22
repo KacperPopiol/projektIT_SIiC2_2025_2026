@@ -78,6 +78,20 @@ const ContactsPage = () => {
 		}
 	}
 
+	const handleDeleteContact = async contactId => {
+		if (!confirm('Czy na pewno chcesz usunąć tego znajomego? Konwersacja zostanie zachowana.')) {
+			return
+		}
+
+		try {
+			await contactsApi.deleteContact(contactId)
+			alert('Znajomy usunięty')
+			await loadContacts() // Odśwież listę
+		} catch (err) {
+			alert('Błąd usuwania znajomego: ' + (err.response?.data?.error || err.message))
+		}
+	}
+
 	const handleAccept = async contactId => {
 		try {
 			await contactsApi.acceptInvitation(contactId)
@@ -420,6 +434,7 @@ const ContactsPage = () => {
 			)}
 
 			{/* Lista znajomych */}
+			{/* Lista znajomych */}
 			<div>
 				<h3>✅ Znajomi ({contacts.length})</h3>
 				{contacts.length === 0 ? (
@@ -440,24 +455,40 @@ const ContactsPage = () => {
 								justifyContent: 'space-between',
 								alignItems: 'center',
 							}}>
-							<div>
+							<div style={{ flex: 1 }}>
 								<strong>{contact.contactUser?.username}</strong>
 								<p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
 									Znajomy od: {new Date(contact.updated_at).toLocaleDateString('pl-PL')}
 								</p>
 							</div>
-							<button
-								onClick={() => navigate('/chat')}
-								style={{
-									padding: '8px 15px',
-									backgroundColor: '#007bff',
-									color: 'white',
-									border: 'none',
-									borderRadius: '5px',
-									cursor: 'pointer',
-								}}>
-								💬 Czat
-							</button>
+							<div style={{ display: 'flex', gap: '10px' }}>
+								<button
+									onClick={() => navigate('/chat')}
+									style={{
+										padding: '8px 15px',
+										backgroundColor: '#007bff',
+										color: 'white',
+										border: 'none',
+										borderRadius: '5px',
+										cursor: 'pointer',
+										fontSize: '14px',
+									}}>
+									💬 Czat
+								</button>
+								<button
+									onClick={() => handleDeleteContact(contact.contact_id)}
+									style={{
+										padding: '8px 15px',
+										backgroundColor: '#dc3545',
+										color: 'white',
+										border: 'none',
+										borderRadius: '5px',
+										cursor: 'pointer',
+										fontSize: '14px',
+									}}>
+									🗑️ Usuń
+								</button>
+							</div>
 						</div>
 					))
 				)}
