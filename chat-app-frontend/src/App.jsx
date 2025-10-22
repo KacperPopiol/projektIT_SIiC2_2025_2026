@@ -4,7 +4,7 @@ import { SocketProvider } from './contexts/SocketContext'
 import ProtectedRoute from './components/Common/ProtectedRoute'
 import ContactsPage from './pages/ContactsPage'
 import GroupsPage from './pages/GroupsPage'
-
+import ProfilePage from './pages/ProfilePage'
 // Pages
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -32,6 +32,14 @@ function App() {
 							element={
 								<ProtectedRoute>
 									<ChatPage />
+								</ProtectedRoute>
+							}
+						/>
+						<Route
+							path='/profile'
+							element={
+								<ProtectedRoute>
+									<ProfilePage />
 								</ProtectedRoute>
 							}
 						/>

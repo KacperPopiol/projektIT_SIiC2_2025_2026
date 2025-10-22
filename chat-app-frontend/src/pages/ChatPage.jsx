@@ -173,26 +173,32 @@ const ChatPage = () => {
 							gap: '10px',
 							marginBottom: '10px',
 						}}>
+						{/* Avatar - POPRAWIONY */}
 						<div
 							style={{
 								width: '40px',
 								height: '40px',
 								borderRadius: '50%',
-								backgroundColor: '#007bff',
+								backgroundColor: user?.avatarUrl ? 'transparent' : '#007bff',
 								color: 'white',
 								display: 'flex',
 								alignItems: 'center',
 								justifyContent: 'center',
 								fontSize: '18px',
 								fontWeight: 'bold',
+								backgroundImage: user?.avatarUrl ? `url(${user.avatarUrl})` : 'none',
+								backgroundSize: 'cover',
+								backgroundPosition: 'center',
+								border: '2px solid #ddd',
 							}}>
-							{user?.username?.charAt(0).toUpperCase()}
+							{!user?.avatarUrl && user?.username?.charAt(0).toUpperCase()}
 						</div>
 						<div style={{ flex: 1 }}>
 							<div style={{ fontWeight: 'bold', fontSize: '14px' }}>{user?.username}</div>
 							<div style={{ fontSize: '12px', color: '#666' }}>{connected ? '🟢 Online' : '🔴 Offline'}</div>
 						</div>
 					</div>
+
 					<button
 						onClick={logout}
 						style={{
@@ -207,6 +213,21 @@ const ChatPage = () => {
 							fontWeight: 'bold',
 						}}>
 						🚪 Wyloguj się
+					</button>
+					<button
+						onClick={() => navigate('/profile')}
+						style={{
+							marginTop: '5px',
+							width: '100%',
+							padding: '5px 15px',
+							backgroundColor: '#17a2b8',
+							color: 'white',
+							border: 'none',
+							borderRadius: '5px',
+							cursor: 'pointer',
+							fontSize: '12px',
+						}}>
+						⚙️ Profil
 					</button>
 				</div>
 
@@ -507,15 +528,19 @@ const ChatPage = () => {
 														width: '35px',
 														height: '35px',
 														borderRadius: '50%',
-														backgroundColor: isSelected ? '#fff' : '#007bff',
+														backgroundColor: otherUser?.avatar_url ? 'transparent' : isSelected ? '#fff' : '#007bff',
 														color: isSelected ? '#007bff' : '#fff',
 														display: 'flex',
 														alignItems: 'center',
 														justifyContent: 'center',
 														fontSize: '14px',
 														fontWeight: 'bold',
+														backgroundImage: otherUser?.avatar_url ? `url(${otherUser.avatar_url})` : 'none',
+														backgroundSize: 'cover',
+														backgroundPosition: 'center',
+														border: isSelected ? '2px solid #0056b3' : '2px solid #ddd',
 													}}>
-													{otherUser?.username?.charAt(0).toUpperCase() || '?'}
+													{!otherUser?.avatar_url && (otherUser?.username?.charAt(0).toUpperCase() || '?')}
 												</div>
 												<div style={{ flex: 1, minWidth: 0 }}>
 													<div style={{ fontWeight: 'bold', fontSize: '14px' }}>

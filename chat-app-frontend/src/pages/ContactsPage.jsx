@@ -20,7 +20,9 @@ const ContactsPage = () => {
 
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
-
+	const [searchQuery, setSearchQuery] = useState('')
+	const [searchResults, setSearchResults] = useState([])
+	const [searching, setSearching] = useState(false)
 	useEffect(() => {
 		loadContacts()
 	}, [])
@@ -96,6 +98,25 @@ const ContactsPage = () => {
 		}
 	}
 
+	const handleSearch = async query => {
+		setSearchQuery(query)
+
+		if (query.trim().length < 2) {
+			setSearchResults([])
+			return
+		}
+
+		try {
+			setSearching(true)
+			const response = await contactsApi.searchContact(query)
+			setSearchResults(response.contacts || [])
+		} catch (err) {
+			console.error('Błąd wyszukiwania:', err)
+			setSearchResults([])
+		} finally {
+			setSearching(false)
+		}
+	}
 	if (loading) {
 		return <div style={{ padding: '20px' }}>Ładowanie...</div>
 	}
@@ -135,6 +156,59 @@ const ContactsPage = () => {
 					{error}
 				</div>
 			)}
+
+			{/* Wyszukiwanie znajomych */}
+			<div style={{ marginBottom: '20px' }}>
+				<h3 style={{ fontSize: '16px', marginBottom: '10px' }}>🔍 Wyszukaj Znajomego</h3>
+				<input
+					type='text'
+					value={searchQuery}
+					onChange={e => handleSearch(e.target.value)}
+					placeholder='Wpisz nazwę użytkownika...'
+					style={{
+						width: '100%',
+						padding: '12px',
+						borderRadius: '8px',
+						border: '1px solid #ddd',
+						fontSize: '14px',
+					}}
+				/>
+
+				{searching && <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>Wyszukiwanie...</p>}
+
+				{searchResults.length > 0 && (
+					<div style={{ marginTop: '15px' }}>
+						<h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Wyniki wyszukiwania:</h4>
+						{searchResults.map(contact => (
+							<div
+								key={contact.contact_id}
+								style={{
+									backgroundColor: '#fff',
+									padding: '12px',
+									borderRadius: '8px',
+									marginBottom: '8px',
+									border: '1px solid #ddd',
+									display: 'flex',
+									justifyContent: 'space-between',
+									alignItems: 'center',
+								}}>
+								<div>
+									<strong>{contact.contactUser?.username}</strong>
+									<div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
+										Status: {contact.status === 'accepted' ? '✅ Znajomy' : '⏳ Oczekuje'}
+									</div>
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+
+				{searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
+					<p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>
+						Nie znaleziono użytkownika "{searchQuery}"
+					</p>
+				)}
+			</div>
 
 			{/* Akcje */}
 			<div
