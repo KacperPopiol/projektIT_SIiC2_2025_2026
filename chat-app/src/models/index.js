@@ -13,6 +13,7 @@ const ConversationParticipant = require('./ConversationParticipant')(sequelize, 
 const Message = require('./Message')(sequelize, DataTypes)
 const MessageReadStatus = require('./MessageReadStatus')(sequelize, DataTypes)
 const DeletedMessage = require('./DeletedMessage')(sequelize, DataTypes)
+const UserKeys = require('./UserKeys')(sequelize, DataTypes)
 
 // Define all associations/relationships
 const defineAssociations = () => {
@@ -85,6 +86,11 @@ const defineAssociations = () => {
 		foreignKey: 'user_id',
 		as: 'deletedMessages',
 		onDelete: 'CASCADE',
+	})
+
+	User.hasOne(UserKeys, {
+		foreignKey: 'user_id',
+		as: 'keys',
 	})
 
 	// ==================== CONTACT RELATIONSHIPS ====================
@@ -238,6 +244,13 @@ const defineAssociations = () => {
 		foreignKey: 'user_id',
 		as: 'user',
 	})
+
+	// ==================== USER KEYS ====================
+
+	UserKeys.belongsTo(User, {
+		foreignKey: 'user_id',
+		as: 'user',
+	})
 }
 
 // Execute associations
@@ -258,6 +271,7 @@ const db = {
 	Message,
 	MessageReadStatus,
 	DeletedMessage,
+	UserKeys,
 }
 
 module.exports = db

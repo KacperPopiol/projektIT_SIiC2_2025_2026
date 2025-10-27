@@ -29,11 +29,11 @@ module.exports = io => {
 		// Dołączenie użytkownika do jego osobistego pokoju
 		socket.join(`user:${socket.userId}`)
 
-		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
-		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
+		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ (Z E2EE) ====================
 		socket.on('send_private_message', async data => {
 			try {
-				const { conversationId, content } = data
+				// 🔐 E2EE: Dodano isEncrypted
+				const { conversationId, content, isEncrypted = false } = data
 
 				// Walidacja danych
 				if (!conversationId || !content?.trim()) {
@@ -99,11 +99,12 @@ module.exports = io => {
 					}
 				}
 
-				// ✅ JEŚLI WSZYSTKO OK - ZAPISZ WIADOMOŚĆ
+				// 🔐 ZAPISZ WIADOMOŚĆ (ZASZYFROWANĄ LUB NIE)
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content.trim(),
+					content: content.trim(), // Już zaszyfrowana po stronie klienta!
+					is_encrypted: isEncrypted, // 🔐 Nowe pole
 				})
 
 				// Pobierz uczestników konwersacji
@@ -122,13 +123,14 @@ module.exports = io => {
 					}
 				}
 
-				// Wyślij wiadomość do wszystkich uczestników konwersacji
+				// 🔐 Wyślij wiadomość (zaszyfrowaną!) do wszystkich uczestników
 				const messageData = {
 					messageId: message.message_id,
 					conversationId,
 					senderId: socket.userId,
 					senderUsername: socket.username,
-					content: content.trim(),
+					content: content.trim(), // Zaszyfrowana treść
+					isEncrypted: isEncrypted, // 🔐 Informacja o szyfrowaniu
 					createdAt: message.created_at,
 				}
 
@@ -150,7 +152,7 @@ module.exports = io => {
 			}
 		})
 
-		// ==================== WYSYŁANIE WIADOMOŚCI GRUPOWEJ ====================
+		// ==================== WYSYŁANIE WIADOMOŚCI GRUPOWEJ (BEZ ZMIAN) ====================
 		socket.on('send_group_message', async data => {
 			try {
 				const { conversationId, groupId, content } = data
@@ -160,6 +162,7 @@ module.exports = io => {
 					conversation_id: conversationId,
 					sender_id: socket.userId,
 					content: content,
+					is_encrypted: false, // 🔐 Grupy na razie bez szyfrowania
 				})
 
 				// Pobierz wszystkich zaakceptowanych członków grupy
@@ -189,6 +192,7 @@ module.exports = io => {
 					senderId: socket.userId,
 					senderUsername: socket.username,
 					content,
+					isEncrypted: false, // 🔐 Informacja o braku szyfrowania
 					createdAt: message.created_at,
 				}
 
@@ -201,12 +205,13 @@ module.exports = io => {
 			}
 		})
 
-		// ==================== OZNACZANIE WIADOMOŚCI JAKO PRZECZYTANEJ ====================
+		// ==================== RESZTA BEZ ZMIAN ====================
+
+		// OZNACZANIE WIADOMOŚCI JAKO PRZECZYTANEJ
 		socket.on('mark_message_read', async data => {
 			try {
 				const { messageId } = data
 
-				// Zaktualizuj status odczytania
 				const [updated] = await db.MessageReadStatus.update(
 					{
 						is_read: true,
@@ -221,10 +226,8 @@ module.exports = io => {
 				)
 
 				if (updated) {
-					// Pobierz informację o nadawcy wiadomości
 					const message = await db.Message.findByPk(messageId)
 
-					// Powiadom nadawcę o przeczytaniu wiadomości
 					io.to(`user:${message.sender_id}`).emit('message_read', {
 						messageId,
 						readBy: socket.userId,
@@ -237,35 +240,35 @@ module.exports = io => {
 			}
 		})
 
-		// ==================== DOŁĄCZANIE DO POKOJU KONWERSACJI ====================
+		// DOŁĄCZANIE DO POKOJU KONWERSACJI
 		socket.on('join_conversation', data => {
 			const { conversationId } = data
 			socket.join(`conversation:${conversationId}`)
 			console.log(`👥 ${socket.username} dołączył do konwersacji ${conversationId}`)
 		})
 
-		// ==================== OPUSZCZANIE POKOJU KONWERSACJI ====================
+		// OPUSZCZANIE POKOJU KONWERSACJI
 		socket.on('leave_conversation', data => {
 			const { conversationId } = data
 			socket.leave(`conversation:${conversationId}`)
 			console.log(`👋 ${socket.username} opuścił konwersację ${conversationId}`)
 		})
 
-		// ==================== DOŁĄCZANIE DO POKOJU GRUPY ====================
+		// DOŁĄCZANIE DO POKOJU GRUPY
 		socket.on('join_group', data => {
 			const { groupId } = data
 			socket.join(`group:${groupId}`)
 			console.log(`👥 ${socket.username} dołączył do grupy ${groupId}`)
 		})
 
-		// ==================== OPUSZCZANIE POKOJU GRUPY ====================
+		// OPUSZCZANIE POKOJU GRUPY
 		socket.on('leave_group', data => {
 			const { groupId } = data
 			socket.leave(`group:${groupId}`)
 			console.log(`👋 ${socket.username} opuścił grupę ${groupId}`)
 		})
 
-		// ==================== WSKAŹNIK PISANIA (TYPING) ====================
+		// WSKAŹNIK PISANIA (TYPING)
 		socket.on('typing', data => {
 			const { conversationId, isGroup, groupId } = data
 
@@ -282,7 +285,7 @@ module.exports = io => {
 			}
 		})
 
-		// ==================== PRZESTANIE PISAĆ ====================
+		// PRZESTANIE PISAĆ
 		socket.on('stop_typing', data => {
 			const { conversationId, isGroup, groupId } = data
 
@@ -298,9 +301,8 @@ module.exports = io => {
 			}
 		})
 
-		// ==================== STATUS ONLINE/OFFLINE ====================
+		// STATUS ONLINE/OFFLINE
 		socket.on('user_online', () => {
-			// Powiadom wszystkich znajomych o tym że użytkownik jest online
 			socket.broadcast.emit('user_status_change', {
 				userId: socket.userId,
 				username: socket.username,
@@ -308,11 +310,10 @@ module.exports = io => {
 			})
 		})
 
-		// ==================== ROZŁĄCZENIE ====================
+		// ROZŁĄCZENIE
 		socket.on('disconnect', () => {
 			console.log(`❌ Użytkownik rozłączony: ${socket.username} (ID: ${socket.userId})`)
 
-			// Powiadom wszystkich o rozłączeniu
 			socket.broadcast.emit('user_status_change', {
 				userId: socket.userId,
 				username: socket.username,

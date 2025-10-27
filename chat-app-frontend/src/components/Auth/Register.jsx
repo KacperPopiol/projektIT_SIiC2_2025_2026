@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { keysApi } from '../../api/keysApi'
+import { generateKeyPair, savePrivateKey, generatePreKeys, savePreKeys } from '../../utils/encryption'
 
 const Register = () => {
 	const [username, setUsername] = useState('')
@@ -35,6 +37,27 @@ const Register = () => {
 		setLoading(false)
 
 		if (result.success) {
+			console.log('🔐 Generowanie kluczy E2EE...')
+
+			// 2. Wygeneruj parę kluczy ECDH
+			const { privateKey, publicKey } = generateKeyPair()
+
+			// 3. Wygeneruj Pre-Keys (10 sztuk)
+			const preKeys = generatePreKeys(10)
+
+			// 4. Zapisz klucz prywatny lokalnie (zaszyfrowany hasłem)
+			savePrivateKey(privateKey, password)
+
+			// 5. Zapisz Pre-Keys lokalnie
+			savePreKeys(preKeys)
+
+			console.log('📤 Wysyłanie klucza publicznego na serwer...')
+
+			// 6. Wyślij klucz publiczny i Pre-Keys na serwer
+			await keysApi.savePublicKey(publicKey, preKeys)
+
+			console.log('✅ Klucze E2EE zapisane!')
+
 			setRecoveryCode(result.data.recoveryCode)
 			setShowRecoveryCode(true)
 		} else {
@@ -121,10 +144,10 @@ const Register = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Nazwa użytkownika:</label>
 					<input
-						type='text'
+						type="text"
 						value={username}
 						onChange={e => setUsername(e.target.value)}
-						placeholder='min. 3 znaki'
+						placeholder="min. 3 znaki"
 						required
 						style={{
 							width: '100%',
@@ -138,10 +161,10 @@ const Register = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Hasło:</label>
 					<input
-						type='password'
+						type="password"
 						value={password}
 						onChange={e => setPassword(e.target.value)}
-						placeholder='min. 6 znaków'
+						placeholder="min. 6 znaków"
 						required
 						style={{
 							width: '100%',
@@ -153,7 +176,7 @@ const Register = () => {
 				</div>
 
 				<button
-					type='submit'
+					type="submit"
 					disabled={loading}
 					style={{
 						width: '100%',
@@ -171,7 +194,7 @@ const Register = () => {
 
 			<p style={{ marginTop: '20px', textAlign: 'center' }}>
 				Masz już konto?{' '}
-				<a href='/login' style={{ color: '#007bff' }}>
+				<a href="/login" style={{ color: '#007bff' }}>
 					Zaloguj się
 				</a>
 			</p>

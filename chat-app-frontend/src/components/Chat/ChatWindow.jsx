@@ -285,7 +285,7 @@ const ChatWindow = ({ conversation }) => {
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
 							fontSize: '18px',
 						}}
-						title='Opcje'>
+						title="Opcje">
 						⋮
 					</button>
 
@@ -375,7 +375,7 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
-					<MessageList messages={messages} onMessageDeleted={handleMessageDeleted} />
+					<MessageList messages={messages} onMessageDeleted={handleMessageDeleted} conversation={conversation} />
 
 					{/* Wskaźnik pisania */}
 					{typingUsers.length > 0 && (

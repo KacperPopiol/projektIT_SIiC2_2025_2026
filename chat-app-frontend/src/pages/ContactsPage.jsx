@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { contactsApi } from '../api/contactsApi'
 import { useAuth } from '../hooks/useAuth'
+import { removeSessionKey } from '../utils/encryption'
 
 const ContactsPage = () => {
 	const navigate = useNavigate()
@@ -85,6 +86,15 @@ const ContactsPage = () => {
 
 		try {
 			await contactsApi.deleteContact(contactId)
+
+			// 🔐 Usuń klucz sesji (E2EE cleanup)
+			const contact = contacts.find(c => c.contact_id === contactId)
+			if (contact) {
+				// Znajdź ID konwersacji i usuń klucz
+				// To wymaga rozszerzenia API o zwracanie conversationId
+				removeSessionKey(`conversation_${contact.contact_user_id}`)
+			}
+
 			alert('Znajomy usunięty')
 			await loadContacts() // Odśwież listę
 		} catch (err) {
@@ -175,10 +185,10 @@ const ContactsPage = () => {
 			<div style={{ marginBottom: '20px' }}>
 				<h3 style={{ fontSize: '16px', marginBottom: '10px' }}>🔍 Wyszukaj Znajomego</h3>
 				<input
-					type='text'
+					type="text"
 					value={searchQuery}
 					onChange={e => handleSearch(e.target.value)}
-					placeholder='Wpisz nazwę użytkownika...'
+					placeholder="Wpisz nazwę użytkownika..."
 					style={{
 						width: '100%',
 						padding: '12px',
@@ -305,10 +315,10 @@ const ContactsPage = () => {
 					<h3>Dodaj Znajomego</h3>
 					<form onSubmit={handleSendInvitation} style={{ marginTop: '15px' }}>
 						<input
-							type='text'
+							type="text"
 							value={inviteCode}
 							onChange={e => setInviteCode(e.target.value.toUpperCase())}
-							placeholder='Wpisz 6-znakowy kod (np. ABC123)'
+							placeholder="Wpisz 6-znakowy kod (np. ABC123)"
 							maxLength={6}
 							style={{
 								width: '100%',
@@ -325,7 +335,7 @@ const ContactsPage = () => {
 						/>
 						<div style={{ display: 'flex', gap: '10px' }}>
 							<button
-								type='submit'
+								type="submit"
 								style={{
 									flex: 1,
 									padding: '10px',
@@ -338,7 +348,7 @@ const ContactsPage = () => {
 								Wyślij Zaproszenie
 							</button>
 							<button
-								type='button'
+								type="button"
 								onClick={() => {
 									setShowAddContact(false)
 									setInviteCode('')

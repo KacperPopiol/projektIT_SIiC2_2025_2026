@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { keysApi } from '../../api/keysApi'
+import { getPrivateKey, generateKeyPair, savePrivateKey, generatePreKeys, savePreKeys } from '../../utils/encryption'
 
 const Login = () => {
 	const [username, setUsername] = useState('')
@@ -20,6 +22,30 @@ const Login = () => {
 		setLoading(false)
 
 		if (result.success) {
+			console.log('✅ Zalogowano')
+			console.log('🔐 Sprawdzanie kluczy E2EE...')
+
+			// 2. Sprawdź czy klucz prywatny istnieje lokalnie
+			const privateKey = getPrivateKey(password)
+
+			if (!privateKey) {
+				console.log('⚠️ Brak klucza prywatnego - generowanie nowego...')
+
+				// Jeśli nie ma klucza (nowe urządzenie lub stara wersja konta)
+				const { privateKey: newPrivateKey, publicKey } = generateKeyPair()
+				const preKeys = generatePreKeys(10)
+
+				savePrivateKey(newPrivateKey, password)
+				savePreKeys(preKeys)
+
+				// Wyślij nowy klucz publiczny na serwer
+				await keysApi.savePublicKey(publicKey, preKeys)
+
+				alert('⚠️ Wygenerowano nowe klucze szyfrowania.\n\nStare wiadomości mogą być niedostępne.')
+			} else {
+				console.log('✅ Klucz prywatny znaleziony lokalnie')
+			}
+
 			navigate('/chat')
 		} else {
 			setError(result.error)
@@ -47,7 +73,7 @@ const Login = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Nazwa użytkownika:</label>
 					<input
-						type='text'
+						type="text"
 						value={username}
 						onChange={e => setUsername(e.target.value)}
 						required
@@ -63,7 +89,7 @@ const Login = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Hasło:</label>
 					<input
-						type='password'
+						type="password"
 						value={password}
 						onChange={e => setPassword(e.target.value)}
 						required
@@ -77,7 +103,7 @@ const Login = () => {
 				</div>
 
 				<button
-					type='submit'
+					type="submit"
 					disabled={loading}
 					style={{
 						width: '100%',
@@ -96,12 +122,12 @@ const Login = () => {
 			<div style={{ marginTop: '20px', textAlign: 'center' }}>
 				<p>
 					Nie masz konta?{' '}
-					<a href='/register' style={{ color: '#007bff' }}>
+					<a href="/register" style={{ color: '#007bff' }}>
 						Zarejestruj się
 					</a>
 				</p>
 				<p style={{ marginTop: '10px' }}>
-					<a href='/recover' style={{ color: '#6c757d' }}>
+					<a href="/recover" style={{ color: '#6c757d' }}>
 						Zapomniałeś hasła?
 					</a>
 				</p>
