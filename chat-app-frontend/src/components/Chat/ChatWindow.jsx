@@ -34,7 +34,11 @@ const ChatWindow = ({ conversation }) => {
 
 		// Nasłuchuj na nowe wiadomości prywatne
 		const handleNewPrivateMessage = data => {
-			console.log('📨 New private message received:', data)
+			console.log('🔵 SOCKET DATA RECEIVED:', data)
+			console.log('🔵 SOCKET DATA KEYS:', Object.keys(data))
+			console.log('🔵 isEncrypted value:', data.isEncrypted)
+			console.log('🔵 Full JSON:', JSON.stringify(data, null, 2))
+
 			if (data.conversationId === conversation.conversationId) {
 				setMessages(prev => [
 					...prev,
@@ -43,6 +47,7 @@ const ChatWindow = ({ conversation }) => {
 						conversation_id: data.conversationId,
 						sender_id: data.senderId,
 						content: data.content,
+						is_encrypted: data.isEncrypted,
 						created_at: data.createdAt,
 						sender: {
 							username: data.senderUsername,
@@ -52,6 +57,27 @@ const ChatWindow = ({ conversation }) => {
 				])
 			}
 		}
+
+		// useEffect(() => {
+		// 	const fetchConversations = async () => {
+		// 		try {
+		// 			const response = await api.get('/api/messages/conversations')
+		// 			console.log('🟢 API RESPONSE:', response.data)
+
+		// 			const conv = response.data.privateConversations.find(c => c.conversation.conversationId === conversationId)
+
+		// 			if (conv) {
+		// 				console.log('🟢 MESSAGES FROM API:', conv.conversation.messages)
+		// 				console.log('🟢 FIRST MESSAGE:', conv.conversation.messages[0])
+		// 				setMessages(conv.conversation.messages || [])
+		// 			}
+		// 		} catch (error) {
+		// 			console.error('Error fetching conversations:', error)
+		// 		}
+		// 	}
+
+		// 	fetchConversations()
+		// }, [conversation.conversationId])
 
 		// Nasłuchuj na nowe wiadomości grupowe
 		const handleNewGroupMessage = data => {
@@ -64,6 +90,7 @@ const ChatWindow = ({ conversation }) => {
 						conversation_id: data.conversationId,
 						sender_id: data.senderId,
 						content: data.content,
+						is_encrypted: data.isEncrypted,
 						created_at: data.createdAt,
 						sender: {
 							username: data.senderUsername,
@@ -285,7 +312,7 @@ const ChatWindow = ({ conversation }) => {
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
 							fontSize: '18px',
 						}}
-						title='Opcje'>
+						title="Opcje">
 						⋮
 					</button>
 
@@ -375,7 +402,7 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
-					<MessageList messages={messages} onMessageDeleted={handleMessageDeleted} />
+					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} />
 
 					{/* Wskaźnik pisania */}
 					{typingUsers.length > 0 && (

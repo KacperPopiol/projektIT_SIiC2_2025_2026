@@ -37,6 +37,14 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.BOOLEAN,
 				defaultValue: false,
 			},
+			public_key_dh: {
+				type: DataTypes.TEXT,
+				allowNull: true,
+			},
+			encrypted_private_key_dh: {
+				type: DataTypes.TEXT,
+				allowNull: true,
+			},
 		},
 		{
 			tableName: 'users',

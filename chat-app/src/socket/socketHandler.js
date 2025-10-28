@@ -33,7 +33,7 @@ module.exports = io => {
 		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
 		socket.on('send_private_message', async data => {
 			try {
-				const { conversationId, content } = data
+				const { conversationId, content, isEncrypted = false } = data
 
 				// Walidacja danych
 				if (!conversationId || !content?.trim()) {
@@ -103,7 +103,8 @@ module.exports = io => {
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content.trim(),
+					content: content,
+					is_encrypted: isEncrypted,
 				})
 
 				// Pobierz uczestników konwersacji
@@ -130,6 +131,7 @@ module.exports = io => {
 					senderUsername: socket.username,
 					content: content.trim(),
 					createdAt: message.created_at,
+					isEncrypted: message.is_encrypted,
 				}
 
 				participants.forEach(participant => {

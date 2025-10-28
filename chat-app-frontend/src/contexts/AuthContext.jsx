@@ -2,34 +2,55 @@
 import { createContext, useState, useEffect } from 'react'
 import { storage } from '../utils/storage'
 import { authApi } from '../api/authApi'
+import { hasPrivateKeyDH, getPrivateKeyDHLocally, importPrivateKeyDH } from '../utils/encryption' // ← DODAJ IMPORT
 
 export const AuthContext = createContext()
 
 export const AuthProvider = ({ children }) => {
 	const [user, setUser] = useState(null)
 	const [token, setToken] = useState(null)
+	const [privateKeyDH, setPrivateKeyDH] = useState(null)
 	const [loading, setLoading] = useState(true)
 
 	// Sprawdź czy użytkownik jest zalogowany przy starcie
 	useEffect(() => {
-		console.log('🔐 AuthContext: Initializing...')
+		const initAuth = async () => {
+			console.log('🔐 AuthContext: Initializing...')
 
-		const savedToken = storage.getToken()
-		const savedUser = storage.getUser()
+			const savedToken = storage.getToken()
+			const savedUser = storage.getUser()
 
-		console.log('🔐 Saved token exists:', !!savedToken)
-		console.log('🔐 Saved user exists:', !!savedUser)
+			console.log('🔐 Saved token exists:', !!savedToken)
+			console.log('🔐 Saved user exists:', !!savedUser)
 
-		if (savedToken && savedUser) {
-			console.log('🔐 Restoring session for:', savedUser.username)
-			setToken(savedToken)
-			setUser(savedUser)
-		} else {
-			console.log('🔐 No saved session found')
+			if (savedToken && savedUser) {
+				console.log('🔐 Restoring session for:', savedUser.username)
+				setToken(savedToken)
+				setUser(savedUser)
+
+				// ✅ DODAJ: Załaduj klucz prywatny jeśli istnieje
+				if (hasPrivateKeyDH()) {
+					try {
+						console.log('🔑 Loading private key from localStorage...')
+						const privateKeyJwk = getPrivateKeyDHLocally()
+						const privateKey = await importPrivateKeyDH(privateKeyJwk)
+						setPrivateKeyDH(privateKey)
+						console.log('🔑 Private key loaded successfully')
+					} catch (error) {
+						console.error('❌ Error loading private key:', error)
+					}
+				} else {
+					console.log('⚠️ No private key found in localStorage')
+				}
+			} else {
+				console.log('🔐 No saved session found')
+			}
+
+			setLoading(false)
+			console.log('🔐 AuthContext: Initialized')
 		}
 
-		setLoading(false)
-		console.log('🔐 AuthContext: Initialized')
+		initAuth()
 	}, [])
 
 	// Rejestracja
@@ -84,7 +105,7 @@ export const AuthProvider = ({ children }) => {
 			const savedToken = localStorage.getItem('token')
 			console.log('🔐 Verification - Token saved:', !!savedToken)
 
-			return { success: true, data }
+			return { success: true, data, password }
 		} catch (error) {
 			console.error('🔐 Register error:', error)
 			return {
@@ -153,7 +174,7 @@ export const AuthProvider = ({ children }) => {
 			console.log('🔐 Verification - Token in localStorage:', !!savedToken)
 			console.log('🔐 Verification - User in localStorage:', !!savedUser)
 
-			return { success: true, data }
+			return { success: true, data, password }
 		} catch (error) {
 			console.error('🔐 Login error:', error)
 			return {
@@ -168,6 +189,7 @@ export const AuthProvider = ({ children }) => {
 		storage.clearAll()
 		setToken(null)
 		setUser(null)
+		setPrivateKeyDH(null)
 	}
 
 	// Odświeżenie danych użytkownika
@@ -189,6 +211,8 @@ export const AuthProvider = ({ children }) => {
 	const value = {
 		user,
 		token,
+		privateKeyDH,
+		setPrivateKeyDH,
 		loading,
 		isAuthenticated: !!token,
 		register,
