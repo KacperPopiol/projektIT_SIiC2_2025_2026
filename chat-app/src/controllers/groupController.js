@@ -622,3 +622,31 @@ exports.getGroupMembers = async (req, res) => {
 		})
 	}
 }
+
+exports.getGroupDetails = async (req, res) => {
+	try {
+		const { groupId } = req.params
+
+		const group = await db.Group.findByPk(groupId, {
+			include: [
+				{
+					model: db.User,
+					as: 'creator',
+					attributes: ['user_id', 'username', 'public_key_dh'],
+				},
+			],
+		})
+
+		if (!group) {
+			return res.status(404).json({ error: 'Grupa nie znaleziona' })
+		}
+
+		res.json({
+			success: true,
+			group,
+		})
+	} catch (error) {
+		console.error('❌ Błąd pobierania szczegółów grupy:', error)
+		res.status(500).json({ error: 'Błąd serwera' })
+	}
+}

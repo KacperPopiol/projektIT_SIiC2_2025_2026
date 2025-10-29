@@ -4,6 +4,11 @@ import { useSocket } from '../../hooks/useSocket'
 import { useAuth } from '../../hooks/useAuth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
+import { keysApi } from '../../api/keysApi'
+import { groupsApi } from '../../api/groupsApi' // <-- DODAJ
+
+import { generateGroupKey, exportGroupKey, encryptGroupKeyForUser, cacheGroupKey } from '../../utils/groupEncryption'
+import { getPrivateKeyDHLocally, importPrivateKeyDH } from '../../utils/encryption'
 
 const ChatWindow = ({ conversation }) => {
 	const [messages, setMessages] = useState([])
@@ -13,11 +18,31 @@ const ChatWindow = ({ conversation }) => {
 	const [menuLoading, setMenuLoading] = useState(false)
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
+	const [hasGroupKey, setHasGroupKey] = useState(false)
+	const [isSettingUp, setIsSettingUp] = useState(false)
 
 	// Ładowanie wiadomości przy zmianie konwersacji
 	useEffect(() => {
 		loadMessages()
 	}, [conversation.conversationId])
+
+	// Sprawdź czy grupa ma klucz
+	useEffect(() => {
+		const checkGroupKey = async () => {
+			if (!conversation?.groupId) return
+
+			try {
+				await keysApi.getGroupKey(conversation.groupId)
+				setHasGroupKey(true)
+			} catch (error) {
+				setHasGroupKey(false)
+			}
+		}
+
+		if (conversation?.type === 'group') {
+			checkGroupKey()
+		}
+	}, [conversation])
 
 	// Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
 	useEffect(() => {
@@ -266,6 +291,69 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	const setupGroupEncryption = async () => {
+		if (!conversation?.groupId) {
+			alert('Błąd: Brak ID grupy')
+			return
+		}
+
+		setIsSettingUp(true)
+		try {
+			const groupId = conversation.groupId
+
+			// 1. Pobierz wszystkich członków grupy
+			const membersResponse = await groupsApi.getGroupMembers(groupId)
+			const members = membersResponse.members
+
+			// 2. Pobierz klucze publiczne wszystkich członków
+			const publicKeysResponse = await keysApi.getGroupPublicKeys(groupId)
+			const publicKeys = publicKeysResponse.publicKeys
+
+			// 3. Wygeneruj klucz grupowy
+			const groupKey = await generateGroupKey()
+			const groupKeyJwk = await exportGroupKey(groupKey)
+
+			// 4. Pobierz mój klucz prywatny
+			const myPrivateKeyJwk = getPrivateKeyDHLocally()
+			if (!myPrivateKeyJwk) {
+				throw new Error('Brak klucza prywatnego DH')
+			}
+			const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+
+			// 5. Zaszyfruj klucz dla każdego członka
+			const encryptedKeys = []
+			for (const member of publicKeys) {
+				const userPublicKeyJwk = JSON.parse(member.publicKey)
+				const encryptedGroupKey = await encryptGroupKeyForUser(groupKeyJwk, userPublicKeyJwk, myPrivateKey)
+
+				encryptedKeys.push({
+					userId: member.userId,
+					encryptedKey: encryptedGroupKey,
+				})
+			}
+
+			// 6. Zapisz wszystkie zaszyfrowane klucze na serwerze
+			for (const encKey of encryptedKeys) {
+				await keysApi.saveGroupKey({
+					groupId: groupId,
+					userId: encKey.userId,
+					encryptedGroupKey: JSON.stringify(encKey.encryptedKey),
+				})
+			}
+
+			// 7. Zapisz lokalnie
+			cacheGroupKey(groupId, groupKey)
+			setHasGroupKey(true)
+
+			alert('Szyfrowanie grupowe skonfigurowane pomyślnie!')
+		} catch (error) {
+			console.error('❌ Błąd konfiguracji szyfrowania:', error)
+			alert('Błąd konfiguracji szyfrowania: ' + error.message)
+		} finally {
+			setIsSettingUp(false)
+		}
+	}
+
 	useEffect(() => {
 		const handleClickOutside = event => {
 			if (showMenu && !event.target.closest('button')) {
@@ -402,6 +490,32 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
+					{/* Jeśli to grupa i nie ma klucza - pokaż komunikat */}
+					{conversation?.type === 'group' && !hasGroupKey && (
+						<div
+							style={{
+								padding: '10px',
+								backgroundColor: '#fff3cd',
+								borderBottom: '1px solid #ffc107',
+								textAlign: 'center',
+							}}>
+							⚠️ Szyfrowanie grupowe nie jest skonfigurowane
+							<button
+								onClick={setupGroupEncryption}
+								disabled={isSettingUp}
+								style={{
+									marginLeft: '10px',
+									padding: '5px 10px',
+									backgroundColor: '#007bff',
+									color: 'white',
+									border: 'none',
+									borderRadius: '5px',
+									cursor: isSettingUp ? 'not-allowed' : 'pointer',
+								}}>
+								{isSettingUp ? 'Konfiguracja...' : '🔐 Skonfiguruj szyfrowanie'}
+							</button>
+						</div>
+					)}
 					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} />
 
 					{/* Wskaźnik pisania */}

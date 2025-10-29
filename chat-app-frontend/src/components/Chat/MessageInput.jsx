@@ -6,8 +6,12 @@ import {
 	encryptMessageWithSharedSecret,
 	getCachedSharedSecret,
 	cacheSharedSecret,
+	getPrivateKeyDHLocally,
+	importPrivateKeyDH,
 } from '../../utils/encryption'
+import { encryptGroupMessage, cacheGroupKey, getCachedGroupKey } from '../../utils/groupEncryption'
 import { keysApi } from '../../api/keysApi'
+import { groupsApi } from '../../api/groupsApi'
 
 const MessageInput = ({ conversation, onMessageSent }) => {
 	const [message, setMessage] = useState('')
@@ -15,15 +19,16 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 	const [sharedSecretAES, setSharedSecretAES] = useState(null)
 	const [loadingKeys, setLoadingKeys] = useState(true)
 	const { socket, connected } = useSocket()
-	const { user, privateKeyDH } = useAuth() // ✅ Klucz prywatny z Context
+	const { user, privateKeyDH } = useAuth()
+	const [groupKey, setGroupKey] = useState(null)
 	const typingTimeoutRef = useRef(null)
 
 	// ✅ INICJALIZACJA SHARED SECRET (ECDH)
 	useEffect(() => {
 		if (conversation.type === 'private' && privateKeyDH && conversation.conversationId) {
 			initializeSharedSecret()
-		} else if (conversation.type === 'group') {
-			// Dla grup póki co bez szyfrowania (lub zaimplementuj grupowy klucz)
+		} else if (conversation.type === 'group' && conversation.groupId) {
+			initializeGroupKey()
 			setLoadingKeys(false)
 		}
 	}, [conversation, privateKeyDH])
@@ -67,6 +72,121 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 		} catch (error) {
 			console.error('❌ Błąd inicjalizacji shared secret:', error)
 		} finally {
+			setLoadingKeys(false)
+		}
+	}
+
+	const initializeGroupKey = async () => {
+		try {
+			setLoadingKeys(true)
+			console.log('🔐 Inicjalizacja klucza grupowego...')
+
+			// 1. Sprawdź cache lokalny
+			let cachedKey = getCachedGroupKey(conversation.groupId)
+
+			if (cachedKey) {
+				setGroupKey(cachedKey)
+				console.log('✅ Klucz grupowy załadowany z cache')
+				setLoadingKeys(false)
+				return
+			}
+
+			console.log('⚠️ Brak klucza w cache - pobieranie z serwera...')
+
+			// 2. Pobierz zaszyfrowany klucz z serwera
+			try {
+				const response = await keysApi.getGroupKey(conversation.groupId)
+
+				console.log('📥 Odpowiedź z serwera:', response)
+
+				// ✅ POPRAWKA: Dane mogą być już obiektem lub stringiem JSON
+				let encryptedKeyData
+				if (typeof response.encryptedKey === 'string') {
+					encryptedKeyData = JSON.parse(response.encryptedKey)
+				} else {
+					encryptedKeyData = response.encryptedKey
+				}
+
+				console.log('🔑 Zaszyfrowane dane:', encryptedKeyData)
+
+				// 3. Pobierz klucz publiczny twórcy grupy
+				const groupResponse = await groupsApi.getGroupDetails(conversation.groupId)
+
+				if (!groupResponse.group?.creator?.public_key_dh) {
+					throw new Error('Brak klucza publicznego twórcy grupy')
+				}
+
+				const creatorPublicKeyJwk = JSON.parse(groupResponse.group.creator.public_key_dh)
+				console.log('👤 Klucz publiczny twórcy pobrany')
+
+				// 4. Pobierz swój klucz prywatny
+				const myPrivateKeyJwk = getPrivateKeyDHLocally()
+				if (!myPrivateKeyJwk) {
+					console.error('❌ Brak klucza prywatnego DH')
+					setLoadingKeys(false)
+					return
+				}
+				const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+				console.log('🔑 Klucz prywatny zaimportowany')
+
+				// 5. Import klucza publicznego twórcy
+				const creatorPublicKey = await crypto.subtle.importKey(
+					'jwk',
+					creatorPublicKeyJwk,
+					{ name: 'ECDH', namedCurve: 'P-256' },
+					false,
+					[]
+				)
+
+				// 6. Wylicz shared secret z twórcą grupy (ECDH)
+				const sharedSecret = await crypto.subtle.deriveBits(
+					{ name: 'ECDH', public: creatorPublicKey },
+					myPrivateKey,
+					256
+				)
+				console.log('🔐 Shared secret wyliczony')
+
+				// 7. Derive AES key z shared secret
+				const aesKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'AES-GCM' }, false, ['decrypt'])
+
+				// 8. ✅ Odszyfruj klucz grupowy
+				const iv = Uint8Array.from(atob(encryptedKeyData.iv), c => c.charCodeAt(0))
+				const ciphertext = Uint8Array.from(atob(encryptedKeyData.ciphertext), c => c.charCodeAt(0))
+
+				const decryptedData = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, aesKey, ciphertext)
+
+				// 9. ✅ Przekonwertuj odszyfrowane dane na string (to jest JWK)
+				const decryptedString = new TextDecoder().decode(decryptedData)
+				console.log('📝 Odszyfrowany string:', decryptedString.substring(0, 50) + '...')
+
+				// 10. ✅ Parse JSON do obiektu JWK
+				const groupKeyJwk = JSON.parse(decryptedString)
+				console.log('🔑 Klucz grupowy JWK:', groupKeyJwk)
+
+				// 11. ✅ Importuj klucz AES z JWK
+				const groupKeyObject = await crypto.subtle.importKey('jwk', groupKeyJwk, { name: 'AES-GCM' }, true, [
+					'encrypt',
+					'decrypt',
+				])
+
+				// 12. Zapisz w cache
+				cacheGroupKey(conversation.groupId, groupKeyObject)
+				setGroupKey(groupKeyObject)
+
+				console.log('✅ Klucz grupowy odszyfrowany i zaimportowany')
+			} catch (error) {
+				if (error.response?.status === 404) {
+					console.warn('⚠️ Klucz grupowy nie istnieje - grupa nie ma szyfrowania')
+				} else {
+					console.error('❌ Błąd pobierania klucza grupowego:', error)
+				}
+				setGroupKey(null)
+			}
+
+			setLoadingKeys(false)
+		} catch (error) {
+			console.error('❌ Błąd inicjalizacji klucza grupowego:', error)
+			setGroupKey(null)
 			setLoadingKeys(false)
 		}
 	}
@@ -181,18 +301,114 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 				console.warn('⚠️ Brak shared secret - wiadomość wysłana bez szyfrowania')
 			}
 
-			// ✅ Wysyłanie przez Socket.io
+			if (conversation.type === 'group') {
+				if (groupKey) {
+					try {
+						console.log('🔐 Szyfrowanie wiadomości grupowej...')
+
+						// 1. Zaszyfruj wiadomość kluczem grupowym (AES-GCM)
+						const encrypted = await encryptGroupMessage(originalMessage, groupKey)
+
+						// 2. Pobierz klucze publiczne wszystkich członków
+						const publicKeysResponse = await keysApi.getGroupPublicKeys(conversation.groupId)
+						const publicKeys = publicKeysResponse.publicKeys
+
+						console.log(`👥 Pobrano klucze publiczne ${publicKeys.length} członków`)
+
+						// 3. Pobierz mój klucz prywatny
+						const myPrivateKeyJwk = getPrivateKeyDHLocally()
+						if (!myPrivateKeyJwk) {
+							throw new Error('Brak klucza prywatnego DH')
+						}
+						const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+
+						// 4. Eksportuj klucz grupowy do JWK
+						const groupKeyJwk = await crypto.subtle.exportKey('jwk', groupKey)
+
+						// 5. Zaszyfruj klucz grupowy dla każdego członka
+						const recipientKeys = {}
+						for (const member of publicKeys) {
+							try {
+								const userPublicKeyJwk = JSON.parse(member.publicKey)
+
+								// Wylicz shared secret z tym użytkownikiem
+								const userPublicKey = await crypto.subtle.importKey(
+									'jwk',
+									userPublicKeyJwk,
+									{ name: 'ECDH', namedCurve: 'P-256' },
+									false,
+									[]
+								)
+
+								const sharedSecret = await crypto.subtle.deriveBits(
+									{ name: 'ECDH', public: userPublicKey },
+									myPrivateKey,
+									256
+								)
+
+								// Derive AES key z shared secret
+								const aesKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'AES-GCM' }, false, [
+									'encrypt',
+								])
+
+								// Zaszyfruj klucz grupowy tym AES key
+								const iv = crypto.getRandomValues(new Uint8Array(12))
+								const encryptedGroupKey = await crypto.subtle.encrypt(
+									{ name: 'AES-GCM', iv: iv },
+									aesKey,
+									new TextEncoder().encode(JSON.stringify(groupKeyJwk))
+								)
+
+								recipientKeys[member.userId] = {
+									ciphertext: btoa(String.fromCharCode(...new Uint8Array(encryptedGroupKey))),
+									iv: btoa(String.fromCharCode(...iv)),
+								}
+
+								console.log(`✅ Klucz zaszyfrowany dla ${member.username}`)
+							} catch (memberError) {
+								console.error(`❌ Błąd szyfrowania dla ${member.username}:`, memberError)
+							}
+						}
+
+						console.log('🔐 Encrypted data:', encrypted)
+						console.log('   - ciphertext:', encrypted.ciphertext)
+						console.log('   - iv:', encrypted.iv)
+						console.log('📤 Sending:', JSON.stringify(encrypted))
+
+						// 6. Wyślij zaszyfrowaną wiadomość
+						socket.emit('send_group_message', {
+							conversationId: conversation.conversationId,
+							groupId: conversation.groupId,
+							encryptedContent: JSON.stringify(encrypted),
+							recipientKeys: recipientKeys,
+							isEncrypted: true,
+						})
+
+						console.log('🔒 Wiadomość grupowa zaszyfrowana i wysłana')
+					} catch (error) {
+						console.error('❌ Błąd szyfrowania grupowego:', error)
+						alert('Błąd szyfrowania wiadomości grupowej: ' + error.message)
+						setSending(false)
+						return
+					}
+				} else {
+					// Bez szyfrowania
+					console.warn('⚠️ Wiadomość grupowa wysłana BEZ szyfrowania')
+					socket.emit('send_group_message', {
+						conversationId: conversation.conversationId,
+						groupId: conversation.groupId,
+						content: originalMessage,
+						isEncrypted: false,
+					})
+				}
+			}
+
+			// ✅ Wysyłanie prywatne przez Socket.io
 			if (conversation.type === 'private') {
 				socket.emit('send_private_message', {
 					conversationId: conversation.conversationId,
 					content: contentToSend,
 					isEncrypted: isEncrypted,
-				})
-			} else {
-				socket.emit('send_group_message', {
-					conversationId: conversation.conversationId,
-					groupId: conversation.groupId,
-					content: contentToSend,
 				})
 			}
 
@@ -243,6 +459,25 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 						<>⏳ Inicjalizacja kluczy szyfrowania...</>
 					) : sharedSecretAES ? (
 						<>🔒 Wiadomości szyfrowane end-to-end (ECDH + AES-256)</>
+					) : (
+						<>⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania</>
+					)}
+				</div>
+			)}
+
+			{conversation.type === 'group' && (
+				<div
+					style={{
+						fontSize: '11px',
+						color: groupKey ? '#28a745' : '#ffc107',
+						display: 'flex',
+						alignItems: 'center',
+						gap: '5px',
+					}}>
+					{loadingKeys ? (
+						<>⏳ Inicjalizacja kluczy grupowych...</>
+					) : groupKey ? (
+						<>🔒 Wiadomości szyfrowane end-to-end (Klucz grupowy AES-256)</>
 					) : (
 						<>⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania</>
 					)}

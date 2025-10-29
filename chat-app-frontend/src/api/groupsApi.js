@@ -78,4 +78,9 @@ export const groupsApi = {
 		const response = await axiosInstance.delete(`/groups/${groupId}`)
 		return response.data
 	},
+
+	getGroupDetails: async groupId => {
+		const response = await axiosInstance.get(`/groups/${groupId}`)
+		return response.data
+	},
 }

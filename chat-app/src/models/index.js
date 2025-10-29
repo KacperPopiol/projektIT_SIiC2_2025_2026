@@ -13,6 +13,7 @@ const ConversationParticipant = require('./ConversationParticipant')(sequelize, 
 const Message = require('./Message')(sequelize, DataTypes)
 const MessageReadStatus = require('./MessageReadStatus')(sequelize, DataTypes)
 const DeletedMessage = require('./DeletedMessage')(sequelize, DataTypes)
+const GroupEncryptedKey = require('./GroupEncryptedKey')(sequelize, DataTypes)
 
 // Define all associations/relationships
 const defineAssociations = () => {
@@ -87,6 +88,12 @@ const defineAssociations = () => {
 		onDelete: 'CASCADE',
 	})
 
+	User.hasMany(GroupEncryptedKey, {
+		foreignKey: 'user_id',
+		as: 'groupEncryptedKeys',
+		onDelete: 'CASCADE',
+	})
+
 	// ==================== CONTACT RELATIONSHIPS ====================
 
 	Contact.belongsTo(User, {
@@ -133,6 +140,12 @@ const defineAssociations = () => {
 	Group.hasOne(Conversation, {
 		foreignKey: 'group_id',
 		as: 'conversation',
+		onDelete: 'CASCADE',
+	})
+
+	Group.hasMany(GroupEncryptedKey, {
+		foreignKey: 'group_id',
+		as: 'encryptedKeys',
 		onDelete: 'CASCADE',
 	})
 
@@ -238,6 +251,20 @@ const defineAssociations = () => {
 		foreignKey: 'user_id',
 		as: 'user',
 	})
+
+	// ==================== GROUP ENCRYPTED KEY RELATIONSHIPS ====================
+
+	GroupEncryptedKey.belongsTo(Group, {
+		foreignKey: 'group_id',
+		as: 'group',
+		onDelete: 'CASCADE',
+	})
+
+	GroupEncryptedKey.belongsTo(User, {
+		foreignKey: 'user_id',
+		as: 'user',
+		onDelete: 'CASCADE',
+	})
 }
 
 // Execute associations
@@ -258,6 +285,7 @@ const db = {
 	Message,
 	MessageReadStatus,
 	DeletedMessage,
+	GroupEncryptedKey,
 }
 
 module.exports = db

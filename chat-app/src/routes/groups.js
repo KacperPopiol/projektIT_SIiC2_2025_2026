@@ -37,4 +37,6 @@ router.put('/:groupId/name', validateGroupName, groupController.updateGroupName)
 // Usuwanie grupy (tylko twórca)
 router.delete('/:groupId', groupController.deleteGroup)
 
+router.get('/:groupId', authenticateToken, groupController.getGroupDetails)
+
 module.exports = router
