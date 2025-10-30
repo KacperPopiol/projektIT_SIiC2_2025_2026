@@ -78,4 +78,24 @@ export const groupsApi = {
 		const response = await axiosInstance.delete(`/groups/${groupId}`)
 		return response.data
 	},
+
+	// Sczegóły grupy
+	getGroupDetails: async groupId => {
+		const response = await axiosInstance.get(`/groups/${groupId}`)
+		return response.data
+	},
+
+	//Inicjalizacja szyfrowania grupowego
+	initializeGroupEncryption: async (groupId, encryptedKeys) => {
+		const response = await axiosInstance.post(`/groups/${groupId}/initialize-encryption`, {
+			encryptedKeys,
+		})
+		return response.data
+	},
+
+	// Dodanie klucza dla członka
+	addKeyForMember: async (groupId, memberId, encryptedKey) => {
+		const response = await axiosInstance.post(`/groups/${groupId}/members/${memberId}/add-key`, { encryptedKey })
+		return response.data
+	},
 }

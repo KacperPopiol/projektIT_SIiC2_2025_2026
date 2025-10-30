@@ -33,7 +33,7 @@ module.exports = io => {
 		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
 		socket.on('send_private_message', async data => {
 			try {
-				const { conversationId, content } = data
+				const { conversationId, content, isEncrypted = false } = data
 
 				// Walidacja danych
 				if (!conversationId || !content?.trim()) {
@@ -103,7 +103,8 @@ module.exports = io => {
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content.trim(),
+					content: content,
+					is_encrypted: isEncrypted,
 				})
 
 				// Pobierz uczestników konwersacji
@@ -130,6 +131,7 @@ module.exports = io => {
 					senderUsername: socket.username,
 					content: content.trim(),
 					createdAt: message.created_at,
+					isEncrypted: message.is_encrypted,
 				}
 
 				participants.forEach(participant => {
@@ -151,18 +153,72 @@ module.exports = io => {
 		})
 
 		// ==================== WYSYŁANIE WIADOMOŚCI GRUPOWEJ ====================
+		// ==================== WYSYŁANIE WIADOMOŚCI GRUPOWEJ ====================
 		socket.on('send_group_message', async data => {
 			try {
-				const { conversationId, groupId, content } = data
+				const { conversationId, groupId, content, encryptedContent, recipientKeys, isEncrypted } = data
 
-				// Zapisz wiadomość do bazy danych
+				console.log('📨 Otrzymano wiadomość grupową:', {
+					conversationId,
+					groupId,
+					isEncrypted: isEncrypted || false,
+					hasContent: !!content,
+					hasEncryptedContent: !!encryptedContent,
+					recipientKeysCount: recipientKeys ? Object.keys(recipientKeys).length : 0,
+				})
+
+				// ✅ Obsłuż ZARÓWNO zaszyfrowane JAK I nieszyfrowane
+				const messageContent = encryptedContent || content
+				const encrypted = isEncrypted === true
+
+				// Walidacja podstawowa
+				if (!conversationId || !groupId || !messageContent) {
+					socket.emit('error', {
+						message: 'Nieprawidłowe dane wiadomości grupowej',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				// ✅ Walidacja tylko dla zaszyfrowanych wiadomości
+				if (
+					encrypted &&
+					(!recipientKeys || typeof recipientKeys !== 'object' || Object.keys(recipientKeys).length === 0)
+				) {
+					socket.emit('error', {
+						message: 'Brak zaszyfrowanych kluczy dla odbiorców',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				// Sprawdź członkostwo
+				const member = await db.GroupMember.findOne({
+					where: {
+						group_id: groupId,
+						user_id: socket.userId,
+						status: 'accepted',
+					},
+				})
+
+				if (!member) {
+					socket.emit('error', {
+						message: 'Nie jesteś członkiem tej grupy',
+						code: 'NOT_MEMBER',
+					})
+					return
+				}
+
+				// Zapisz wiadomość
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content,
+					content: messageContent,
+					is_encrypted: encrypted,
+					recipient_keys: encrypted ? JSON.stringify(recipientKeys) : null,
 				})
 
-				// Pobierz wszystkich zaakceptowanych członków grupy
+				// Pobierz członków grupy
 				const groupMembers = await db.GroupMember.findAll({
 					where: {
 						group_id: groupId,
@@ -170,34 +226,71 @@ module.exports = io => {
 					},
 				})
 
-				// Utwórz statusy odczytania dla wszystkich członków (oprócz nadawcy)
-				for (const member of groupMembers) {
-					if (member.user_id !== socket.userId) {
-						await db.MessageReadStatus.create({
-							message_id: message.message_id,
-							user_id: member.user_id,
-							is_read: false,
-						})
-					}
+				// Utwórz statusy odczytania
+				const readStatuses = groupMembers
+					.filter(m => m.user_id !== socket.userId)
+					.map(m => ({
+						message_id: message.message_id,
+						user_id: m.user_id,
+						is_read: false,
+					}))
+
+				if (readStatuses.length > 0) {
+					await db.MessageReadStatus.bulkCreate(readStatuses)
 				}
 
-				// Wyślij wiadomość do wszystkich członków grupy
-				const messageData = {
-					messageId: message.message_id,
-					conversationId,
-					groupId,
-					senderId: socket.userId,
-					senderUsername: socket.username,
-					content,
-					createdAt: message.created_at,
-				}
-
+				// ✅ Wyślij do wszystkich członków (z odpowiednimi danymi)
 				groupMembers.forEach(member => {
-					io.to(`user:${member.user_id}`).emit('new_group_message', messageData)
+					const messageData = {
+						messageId: message.message_id,
+						conversationId,
+						groupId,
+						senderId: socket.userId,
+						senderUsername: socket.username,
+						content: message.content,
+						isEncrypted: encrypted,
+						createdAt: message.created_at,
+						encryptedGroupKey: encrypted ? recipientKeys[member.user_id] : null,
+					}
+
+					// Wyślij wiadomość
+					if (encrypted) {
+						// Dla zaszyfrowanych - tylko jeśli ma klucz
+						if (messageData.encryptedGroupKey) {
+							io.to(`user:${member.user_id}`).emit('new_group_message', messageData)
+							console.log(`✅ Wysłano zaszyfrowaną wiadomość do user:${member.user_id}`)
+						} else if (member.user_id !== socket.userId) {
+							console.warn(`⚠️ Nie wysłano zaszyfrowanej wiadomości do user:${member.user_id} - brak klucza`)
+						}
+					} else {
+						// Dla nieszyfrowanych - wyślij wszystkim
+						io.to(`user:${member.user_id}`).emit('new_group_message', messageData)
+						console.log(`📤 Wysłano nieszyfrowaną wiadomość do user:${member.user_id}`)
+					}
 				})
+
+				// Potwierdzenie dla nadawcy
+				socket.emit('message_sent', {
+					success: true,
+					message: {
+						messageId: message.message_id,
+						conversationId,
+						senderId: socket.userId,
+						senderUsername: socket.username,
+						createdAt: message.created_at,
+						isEncrypted: encrypted,
+						groupId,
+					},
+				})
+
+				console.log(`✅ Wiadomość grupowa zapisana (ID: ${message.message_id}, encrypted: ${encrypted})`)
 			} catch (error) {
 				console.error('❌ Błąd wysyłania wiadomości grupowej:', error)
-				socket.emit('error', { message: 'Nie udało się wysłać wiadomości grupowej' })
+				socket.emit('error', {
+					message: 'Nie udało się wysłać wiadomości grupowej',
+					code: 'SERVER_ERROR',
+					details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+				})
 			}
 		})
 

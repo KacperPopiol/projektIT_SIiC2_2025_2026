@@ -35,10 +35,10 @@ exports.createGroup = async (req, res) => {
 			success: true,
 			message: 'Grupa utworzona pomyślnie',
 			group: {
-				group_id: group.group_id,
-				group_name: group.group_name,
-				creator_id: group.creator_id,
-				created_at: group.created_at,
+				groupId: group.group_id,
+				groupName: group.group_name,
+				creatorId: group.creator_id,
+				conversationId: conversation.conversation_id,
 			},
 			conversationId: conversation.conversation_id,
 		})
@@ -620,5 +620,197 @@ exports.getGroupMembers = async (req, res) => {
 		res.status(500).json({
 			error: 'Błąd serwera',
 		})
+	}
+}
+
+exports.getGroupDetails = async (req, res) => {
+	try {
+		const { groupId } = req.params
+
+		const group = await db.Group.findByPk(groupId, {
+			include: [
+				{
+					model: db.User,
+					as: 'creator',
+					attributes: ['user_id', 'username', 'public_key_dh'],
+				},
+			],
+		})
+
+		if (!group) {
+			return res.status(404).json({ error: 'Grupa nie znaleziona' })
+		}
+
+		res.json({
+			success: true,
+			group,
+		})
+	} catch (error) {
+		console.error('❌ Błąd pobierania szczegółów grupy:', error)
+		res.status(500).json({ error: 'Błąd serwera' })
+	}
+}
+
+/**
+ * Inicjalizuje szyfrowanie grupowe
+ * Frontend generuje klucz i wysyła zaszyfrowane kopie dla wszystkich członków
+ */
+exports.initializeGroupEncryption = async (req, res) => {
+	try {
+		const { groupId } = req.params
+		const { encryptedKeys } = req.body // Array: [{ userId, encryptedKey }, ...]
+		const userId = req.user.userId
+
+		console.log('🔐 Inicjalizacja szyfrowania dla grupy:', groupId)
+		console.log('   Liczba kluczy:', encryptedKeys?.length)
+
+		// Sprawdź uprawnienia - tylko twórca lub admin może inicjalizować
+		const member = await db.GroupMember.findOne({
+			where: {
+				group_id: groupId,
+				user_id: userId,
+				status: 'accepted',
+			},
+		})
+
+		if (!member || (member.role !== 'creator' && member.role !== 'admin')) {
+			return res.status(403).json({
+				error: 'Tylko twórca lub admin może inicjalizować szyfrowanie',
+			})
+		}
+
+		// Walidacja danych
+		if (!encryptedKeys || !Array.isArray(encryptedKeys) || encryptedKeys.length === 0) {
+			return res.status(400).json({
+				error: 'Brak zaszyfrowanych kluczy',
+			})
+		}
+
+		// Sprawdź czy szyfrowanie już istnieje
+		const existingKeys = await db.GroupEncryptedKey.findAll({
+			where: { group_id: groupId },
+		})
+
+		if (existingKeys.length > 0) {
+			console.log('⚠️ Szyfrowanie już istnieje - aktualizacja')
+			// Usuń stare klucze
+			await db.GroupEncryptedKey.destroy({
+				where: { group_id: groupId },
+			})
+		}
+
+		// Zapisz zaszyfrowane klucze dla każdego członka
+		const savedKeys = []
+		for (const encKey of encryptedKeys) {
+			// Walidacja struktury
+			if (!encKey.userId || !encKey.encryptedKey) {
+				console.warn('⚠️ Nieprawidłowy klucz:', encKey)
+				continue
+			}
+
+			// Sprawdź czy użytkownik jest członkiem grupy
+			const isMember = await db.GroupMember.findOne({
+				where: {
+					group_id: groupId,
+					user_id: encKey.userId,
+					status: 'accepted',
+				},
+			})
+
+			if (!isMember) {
+				console.warn(`⚠️ Użytkownik ${encKey.userId} nie jest członkiem grupy`)
+				continue
+			}
+
+			// Zapisz zaszyfrowany klucz
+			await db.GroupEncryptedKey.create({
+				group_id: groupId,
+				user_id: encKey.userId,
+				encrypted_key: encKey.encryptedKey,
+			})
+
+			savedKeys.push(encKey.userId)
+			console.log(`✅ Klucz zapisany dla użytkownika ${encKey.userId}`)
+		}
+
+		console.log(`✅ Szyfrowanie zainicjalizowane dla ${savedKeys.length} członków`)
+
+		res.json({
+			success: true,
+			message: 'Szyfrowanie grupowe zainicjalizowane',
+			keysCount: savedKeys.length,
+		})
+	} catch (error) {
+		console.error('❌ Błąd inicjalizacji szyfrowania:', error)
+		res.status(500).json({ error: 'Błąd serwera' })
+	}
+}
+
+/**
+ * Dodaje zaszyfrowany klucz grupowy dla nowego członka
+ * Wywoływane z frontendu gdy członek zostanie zaakceptowany
+ */
+exports.addKeyForMember = async (req, res) => {
+	try {
+		const { groupId, memberId } = req.params
+		const { encryptedKey } = req.body
+		const userId = req.user.userId
+
+		console.log(`🔑 Dodawanie klucza dla członka ${memberId} w grupie ${groupId}`)
+
+		// Sprawdź uprawnienia
+		const requester = await db.GroupMember.findOne({
+			where: {
+				group_id: groupId,
+				user_id: userId,
+				status: 'accepted',
+			},
+		})
+
+		if (!requester || (requester.role !== 'creator' && requester.role !== 'admin')) {
+			return res.status(403).json({ error: 'Brak uprawnień' })
+		}
+
+		// Sprawdź czy członek jest w grupie
+		const member = await db.GroupMember.findOne({
+			where: {
+				group_id: groupId,
+				user_id: memberId,
+				status: 'accepted',
+			},
+		})
+
+		if (!member) {
+			return res.status(404).json({ error: 'Członek nie znaleziony' })
+		}
+
+		// Sprawdź czy klucz już istnieje
+		const existingKey = await db.GroupEncryptedKey.findOne({
+			where: {
+				group_id: groupId,
+				user_id: memberId,
+			},
+		})
+
+		if (existingKey) {
+			console.log('⚠️ Klucz już istnieje - aktualizacja')
+			await existingKey.update({ encrypted_key: encryptedKey })
+		} else {
+			await db.GroupEncryptedKey.create({
+				group_id: groupId,
+				user_id: memberId,
+				encrypted_key: encryptedKey,
+			})
+		}
+
+		console.log(`✅ Klucz dodany dla członka ${memberId}`)
+
+		res.json({
+			success: true,
+			message: 'Klucz grupowy dodany dla członka',
+		})
+	} catch (error) {
+		console.error('❌ Błąd dodawania klucza:', error)
+		res.status(500).json({ error: 'Błąd serwera' })
 	}
 }

@@ -4,6 +4,7 @@ import { useSocket } from '../../hooks/useSocket'
 import { useAuth } from '../../hooks/useAuth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
+import { keysApi } from '../../api/keysApi'
 
 const ChatWindow = ({ conversation }) => {
 	const [messages, setMessages] = useState([])
@@ -25,16 +26,15 @@ const ChatWindow = ({ conversation }) => {
 
 		console.log('🔌 Setting up socket listeners for conversation:', conversation.conversationId)
 
-		// Dołącz do pokoju konwersacji
+		// Dołączenie do pokoju konwersacji
 		if (conversation.type === 'private') {
 			socket.emit('join_conversation', { conversationId: conversation.conversationId })
 		} else {
 			socket.emit('join_group', { groupId: conversation.groupId })
 		}
 
-		// Nasłuchuj na nowe wiadomości prywatne
+		// Nasłuchiwanie na nowe wiadomości prywatne
 		const handleNewPrivateMessage = data => {
-			console.log('📨 New private message received:', data)
 			if (data.conversationId === conversation.conversationId) {
 				setMessages(prev => [
 					...prev,
@@ -43,6 +43,7 @@ const ChatWindow = ({ conversation }) => {
 						conversation_id: data.conversationId,
 						sender_id: data.senderId,
 						content: data.content,
+						is_encrypted: data.isEncrypted,
 						created_at: data.createdAt,
 						sender: {
 							username: data.senderUsername,
@@ -53,7 +54,7 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// Nasłuchuj na nowe wiadomości grupowe
+		// Nasłuchiwanie na nowe wiadomości grupowe
 		const handleNewGroupMessage = data => {
 			console.log('📨 New group message received:', data)
 			if (data.conversationId === conversation.conversationId) {
@@ -64,6 +65,7 @@ const ChatWindow = ({ conversation }) => {
 						conversation_id: data.conversationId,
 						sender_id: data.senderId,
 						content: data.content,
+						is_encrypted: data.isEncrypted,
 						created_at: data.createdAt,
 						sender: {
 							username: data.senderUsername,
@@ -74,7 +76,7 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// Nasłuchuj na statusy odczytania
+		// Nasłuchiwanie na statusy odczytania
 		const handleMessageRead = data => {
 			console.log('✅ Message read:', data)
 			setMessages(prev =>
@@ -97,7 +99,7 @@ const ChatWindow = ({ conversation }) => {
 			)
 		}
 
-		// Nasłuchuj na wskaźnik pisania
+		// Nasłuchiwanie na wskaźnik pisania
 		const handleUserTyping = data => {
 			if (data.conversationId === conversation.conversationId && data.userId !== user?.userId) {
 				setTypingUsers(prev => {
@@ -109,21 +111,21 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// Nasłuchuj na przestanie pisać
+		// Nasłuchiwanie na przestanie pisanie
 		const handleUserStopTyping = data => {
 			if (data.conversationId === conversation.conversationId) {
 				setTypingUsers(prev => prev.filter(u => u.userId !== data.userId))
 			}
 		}
 
-		// Zarejestruj wszystkie listenery
+		// Listenery
 		socket.on('new_private_message', handleNewPrivateMessage)
 		socket.on('new_group_message', handleNewGroupMessage)
 		socket.on('message_read', handleMessageRead)
 		socket.on('user_typing', handleUserTyping)
 		socket.on('user_stop_typing', handleUserStopTyping)
 
-		// Cleanup - usuń listenery i opuść pokój
+		// Cleanup - usunięcie listenerów i opuszczenie pokoju
 		return () => {
 			console.log('🔌 Cleaning up socket listeners')
 			socket.off('new_private_message', handleNewPrivateMessage)
@@ -144,7 +146,7 @@ const ChatWindow = ({ conversation }) => {
 	useEffect(() => {
 		if (!socket || !connected || messages.length === 0) return
 
-		// Oznacz wszystkie nieprzeczytane wiadomości jako przeczytane
+		// Oznaczenie wszystkich nieprzeczytanych wiadomości jako przeczytane
 		messages.forEach(message => {
 			if (message.sender_id !== user?.userId) {
 				const isRead = message.readStatuses?.some(s => s.user_id === user?.userId && s.is_read)
@@ -155,6 +157,18 @@ const ChatWindow = ({ conversation }) => {
 		})
 	}, [messages, socket, connected, user])
 
+	useEffect(() => {
+		const handleClickOutside = event => {
+			if (showMenu && !event.target.closest('button')) {
+				setShowMenu(false)
+			}
+		}
+
+		document.addEventListener('click', handleClickOutside)
+		return () => document.removeEventListener('click', handleClickOutside)
+	}, [showMenu])
+
+	// Ładowanie wiadomości
 	const loadMessages = async () => {
 		try {
 			setLoading(true)
@@ -167,15 +181,17 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
 	const handleNewMessage = message => {
-		// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
 		setMessages(prev => [...prev, message])
 	}
+
+	// Usunięcie wiadomości z lokalnego stanu
 	const handleMessageDeleted = messageId => {
-		// Usuń wiadomość z lokalnego stanu
 		setMessages(prev => prev.filter(msg => msg.message_id !== messageId))
 	}
 
+	// Archiwizacja konwersacji
 	const handleArchiveConversation = async () => {
 		if (!confirm('Czy na pewno chcesz zarchiwizować tę konwersację?')) return
 
@@ -184,7 +200,6 @@ const ChatWindow = ({ conversation }) => {
 			await messagesApi.archiveConversation(conversation.conversationId)
 			alert('Konwersacja zarchiwizowana! Znajdziesz ją w archiwum.')
 			setShowMenu(false)
-			// Możesz dodać callback do rodzica aby odświeżył listę
 		} catch (err) {
 			alert('Błąd archiwizacji: ' + (err.response?.data?.error || err.message))
 		} finally {
@@ -192,6 +207,7 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	// Usunięcie chatu
 	const handleDeleteChat = async () => {
 		if (
 			!confirm('Czy na pewno chcesz usunąć CAŁĄ konwersację? Wszystkie wiadomości zostaną usunięte po Twojej stronie.')
@@ -203,7 +219,7 @@ const ChatWindow = ({ conversation }) => {
 			await messagesApi.deleteChat(conversation.conversationId)
 			alert('Konwersacja usunięta po Twojej stronie')
 			setShowMenu(false)
-			setMessages([]) // Wyczyść wiadomości lokalnie
+			setMessages([])
 		} catch (err) {
 			alert('Błąd usuwania: ' + (err.response?.data?.error || err.message))
 		} finally {
@@ -216,12 +232,10 @@ const ChatWindow = ({ conversation }) => {
 			setMenuLoading(true)
 			const response = await messagesApi.exportConversation(conversation.conversationId)
 
-			// Utwórz plik JSON do pobrania
 			const dataStr = JSON.stringify(response.data, null, 2)
 			const dataBlob = new Blob([dataStr], { type: 'application/json' })
 			const url = URL.createObjectURL(dataBlob)
 
-			// Utwórz link do pobrania
 			const link = document.createElement('a')
 			link.href = url
 			link.download = `chat-${conversation.name}-${Date.now()}.json`
@@ -238,17 +252,6 @@ const ChatWindow = ({ conversation }) => {
 			setMenuLoading(false)
 		}
 	}
-
-	useEffect(() => {
-		const handleClickOutside = event => {
-			if (showMenu && !event.target.closest('button')) {
-				setShowMenu(false)
-			}
-		}
-
-		document.addEventListener('click', handleClickOutside)
-		return () => document.removeEventListener('click', handleClickOutside)
-	}, [showMenu])
 
 	return (
 		<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -285,7 +288,7 @@ const ChatWindow = ({ conversation }) => {
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
 							fontSize: '18px',
 						}}
-						title='Opcje'>
+						title="Opcje">
 						⋮
 					</button>
 
@@ -375,7 +378,7 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
-					<MessageList messages={messages} onMessageDeleted={handleMessageDeleted} />
+					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} />
 
 					{/* Wskaźnik pisania */}
 					{typingUsers.length > 0 && (

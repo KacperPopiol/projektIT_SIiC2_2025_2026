@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import { generateECDHKeyPair, encryptPrivateKeyDH, savePrivateKeyDHLocally } from '../../utils/encryption'
+import { keysApi } from '../../api/keysApi'
 
 const Register = () => {
 	const [username, setUsername] = useState('')
@@ -10,7 +12,7 @@ const Register = () => {
 	const [recoveryCode, setRecoveryCode] = useState('')
 	const [showRecoveryCode, setShowRecoveryCode] = useState(false)
 
-	const { register } = useAuth()
+	const { register, setPrivateKeyDH } = useAuth()
 	const navigate = useNavigate()
 
 	const handleSubmit = async e => {
@@ -18,7 +20,6 @@ const Register = () => {
 		setError('')
 		setLoading(true)
 
-		// Walidacja
 		if (username.length < 3) {
 			setError('Nazwa użytkownika musi mieć minimum 3 znaki')
 			setLoading(false)
@@ -32,14 +33,37 @@ const Register = () => {
 		}
 
 		const result = await register(username, password)
-		setLoading(false)
 
-		if (result.success) {
+		if (!result.success) {
+			setError(result.error)
+			setLoading(false)
+			return
+		}
+
+		try {
+			const { privateKey, publicKeyJwk } = await generateECDHKeyPair()
+
+			const privateKeyJwk = await window.crypto.subtle.exportKey('jwk', privateKey)
+			const privateKeyString = JSON.stringify(privateKeyJwk)
+
+			const encryptedPrivateKey = encryptPrivateKeyDH(privateKeyString, password)
+
+			await keysApi.saveECDHKeys(publicKeyJwk, encryptedPrivateKey)
+
+			savePrivateKeyDHLocally(privateKeyJwk)
+
+			setPrivateKeyDH(privateKey)
+
 			setRecoveryCode(result.data.recoveryCode)
 			setShowRecoveryCode(true)
-		} else {
-			setError(result.error)
+		} catch (error) {
+			console.error('Błąd generowania kluczy:', error)
+			setError('Błąd generowania kluczy szyfrowania')
+			setLoading(false)
+			return
 		}
+
+		setLoading(false)
 	}
 
 	const handleContinue = () => {
@@ -121,10 +145,10 @@ const Register = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Nazwa użytkownika:</label>
 					<input
-						type='text'
+						type="text"
 						value={username}
 						onChange={e => setUsername(e.target.value)}
-						placeholder='min. 3 znaki'
+						placeholder="min. 3 znaki"
 						required
 						style={{
 							width: '100%',
@@ -138,10 +162,10 @@ const Register = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Hasło:</label>
 					<input
-						type='password'
+						type="password"
 						value={password}
 						onChange={e => setPassword(e.target.value)}
-						placeholder='min. 6 znaków'
+						placeholder="min. 6 znaków"
 						required
 						style={{
 							width: '100%',
@@ -153,7 +177,7 @@ const Register = () => {
 				</div>
 
 				<button
-					type='submit'
+					type="submit"
 					disabled={loading}
 					style={{
 						width: '100%',
@@ -171,7 +195,7 @@ const Register = () => {
 
 			<p style={{ marginTop: '20px', textAlign: 'center' }}>
 				Masz już konto?{' '}
-				<a href='/login' style={{ color: '#007bff' }}>
+				<a href="/login" style={{ color: '#007bff' }}>
 					Zaloguj się
 				</a>
 			</p>

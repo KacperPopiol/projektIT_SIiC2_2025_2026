@@ -79,6 +79,7 @@ exports.getMessages = async (req, res) => {
 					attributes: ['user_id', 'is_read', 'read_at'],
 				},
 			],
+			attributes: ['message_id', 'conversation_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
 			order: [['created_at', 'DESC']],
 			limit: parseInt(limit),
 			offset: parseInt(offset),
@@ -308,6 +309,7 @@ exports.getConversations = async (req, res) => {
 							as: 'messages',
 							limit: 1,
 							order: [['created_at', 'DESC']],
+							attributes: ['message_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
 							include: [
 								{
 									model: db.User,

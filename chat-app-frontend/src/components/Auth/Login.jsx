@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
+import {
+	hasPrivateKeyDH,
+	getPrivateKeyDHLocally,
+	importPrivateKeyDH,
+	decryptPrivateKeyDH,
+	savePrivateKeyDHLocally,
+} from '../../utils/encryption'
+import { keysApi } from '../../api/keysApi'
 
 const Login = () => {
 	const [username, setUsername] = useState('')
@@ -8,7 +16,7 @@ const Login = () => {
 	const [error, setError] = useState('')
 	const [loading, setLoading] = useState(false)
 
-	const { login } = useAuth()
+	const { login, setPrivateKeyDH } = useAuth()
 	const navigate = useNavigate()
 
 	const handleSubmit = async e => {
@@ -17,12 +25,67 @@ const Login = () => {
 		setLoading(true)
 
 		const result = await login(username, password)
-		setLoading(false)
 
-		if (result.success) {
-			navigate('/chat')
-		} else {
+		if (!result.success) {
 			setError(result.error)
+			setLoading(false)
+			return
+		}
+
+		if (hasPrivateKeyDH()) {
+			try {
+				const privateKeyJwk = getPrivateKeyDHLocally()
+				const privateKey = await importPrivateKeyDH(privateKeyJwk)
+
+				setPrivateKeyDH(privateKey)
+
+				console.log('Klucz prywatny DH załadowany z localStorage')
+			} catch (error) {
+				console.error('Błąd importu klucza:', error)
+			}
+		} else {
+			const shouldRecover = confirm(
+				'Brak klucza prywatnego na tym urządzeniu.\n\n' + 'Pobrać backup z serwera? (wymagane hasło)'
+			)
+
+			if (shouldRecover) {
+				await recoverPrivateKeyFromServer(password)
+			} else {
+				alert('Bez klucza prywatnego nie możesz odszyfrować wiadomości!')
+			}
+		}
+
+		setLoading(false)
+		navigate('/chat')
+	}
+
+	const recoverPrivateKeyFromServer = async password => {
+		try {
+			const response = await keysApi.getEncryptedPrivateKeyDH()
+
+			if (!response.encryptedPrivateKey) {
+				alert('Brak backupu klucza na serwerze')
+				return
+			}
+
+			const privateKeyString = decryptPrivateKeyDH(response.encryptedPrivateKey, password)
+
+			if (!privateKeyString) {
+				alert('Nieprawidłowe hasło')
+				return
+			}
+
+			const privateKeyJwk = JSON.parse(privateKeyString)
+			savePrivateKeyDHLocally(privateKeyJwk)
+
+			const privateKey = await importPrivateKeyDH(privateKeyJwk)
+			setPrivateKeyDH(privateKey)
+
+			console.log('Klucz prywatny odzyskany!')
+			alert('Klucz prywatny odzyskany!')
+		} catch (error) {
+			console.error('Błąd odzyskiwania klucza:', error)
+			alert('Nie udało się odzyskać klucza')
 		}
 	}
 
@@ -47,7 +110,7 @@ const Login = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Nazwa użytkownika:</label>
 					<input
-						type='text'
+						type="text"
 						value={username}
 						onChange={e => setUsername(e.target.value)}
 						required
@@ -63,7 +126,7 @@ const Login = () => {
 				<div style={{ marginBottom: '15px' }}>
 					<label style={{ display: 'block', marginBottom: '5px' }}>Hasło:</label>
 					<input
-						type='password'
+						type="password"
 						value={password}
 						onChange={e => setPassword(e.target.value)}
 						required
@@ -77,7 +140,7 @@ const Login = () => {
 				</div>
 
 				<button
-					type='submit'
+					type="submit"
 					disabled={loading}
 					style={{
 						width: '100%',
@@ -96,12 +159,12 @@ const Login = () => {
 			<div style={{ marginTop: '20px', textAlign: 'center' }}>
 				<p>
 					Nie masz konta?{' '}
-					<a href='/register' style={{ color: '#007bff' }}>
+					<a href="/register" style={{ color: '#007bff' }}>
 						Zarejestruj się
 					</a>
 				</p>
 				<p style={{ marginTop: '10px' }}>
-					<a href='/recover' style={{ color: '#6c757d' }}>
+					<a href="/recover" style={{ color: '#6c757d' }}>
 						Zapomniałeś hasła?
 					</a>
 				</p>
