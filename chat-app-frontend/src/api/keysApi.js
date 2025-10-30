@@ -22,6 +22,12 @@ export const keysApi = {
 		return response.data
 	},
 
+	// Pobierz klucze publiczne wszystkich uczestników konwersacji
+	getConversationPublicKeys: async conversationId => {
+		const response = await axiosInstance.get(`/keys/conversation/${conversationId}/public-keys`)
+		return response.data
+	},
+
 	getGroupPublicKeys: async groupId => {
 		const response = await axiosInstance.get(`/keys/group/${groupId}/public-keys`)
 		return response.data

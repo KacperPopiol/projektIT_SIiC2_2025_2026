@@ -21,12 +21,10 @@ const ChatPage = () => {
 	const [selectedConversation, setSelectedConversation] = useState(null)
 	const [loading, setLoading] = useState(true)
 
-	// Ładuj dane przy starcie
 	useEffect(() => {
 		loadData()
 	}, [])
 
-	// Nasłuchuj na nowe wiadomości aby odświeżyć listę konwersacji
 	useEffect(() => {
 		if (!socket || !connected) return
 

@@ -1,8 +1,5 @@
 const db = require('../models')
 
-/**
- * Zapisz klucze ECDH (publiczny + zaszyfrowany prywatny)
- */
 exports.saveECDHKeys = async (req, res) => {
 	try {
 		const userId = req.user.userId
@@ -21,14 +18,11 @@ exports.saveECDHKeys = async (req, res) => {
 			message: 'Klucze ECDH zapisane',
 		})
 	} catch (error) {
-		console.error('❌ Błąd zapisywania kluczy ECDH:', error)
+		console.error('Błąd zapisywania kluczy ECDH:', error)
 		res.status(500).json({ error: 'Błąd serwera' })
 	}
 }
 
-/**
- * Pobierz klucz publiczny użytkownika
- */
 exports.getPublicKeyDH = async (req, res) => {
 	try {
 		const { userId } = req.params
@@ -46,14 +40,11 @@ exports.getPublicKeyDH = async (req, res) => {
 			publicKey: user.public_key_dh,
 		})
 	} catch (error) {
-		console.error('❌ Błąd pobierania klucza publicznego:', error)
+		console.error('Błąd pobierania klucza publicznego:', error)
 		res.status(500).json({ error: 'Błąd serwera' })
 	}
 }
 
-/**
- * Pobierz zaszyfrowany klucz prywatny (backup)
- */
 exports.getEncryptedPrivateKeyDH = async (req, res) => {
 	try {
 		const userId = req.user.userId
@@ -71,20 +62,16 @@ exports.getEncryptedPrivateKeyDH = async (req, res) => {
 			encryptedPrivateKey: user.encrypted_private_key_dh,
 		})
 	} catch (error) {
-		console.error('❌ Błąd pobierania klucza prywatnego:', error)
+		console.error('Błąd pobierania klucza prywatnego:', error)
 		res.status(500).json({ error: 'Błąd serwera' })
 	}
 }
 
-/**
- * Pobierz klucze publiczne wszystkich uczestników konwersacji
- */
 exports.getConversationPublicKeys = async (req, res) => {
 	try {
 		const { conversationId } = req.params
 		const userId = req.user.userId
 
-		// Sprawdź dostęp
 		const participant = await db.ConversationParticipant.findOne({
 			where: {
 				conversation_id: conversationId,
@@ -96,7 +83,6 @@ exports.getConversationPublicKeys = async (req, res) => {
 			return res.status(403).json({ error: 'Brak dostępu' })
 		}
 
-		// Pobierz uczestników
 		const participants = await db.ConversationParticipant.findAll({
 			where: { conversation_id: conversationId },
 			include: [
@@ -119,7 +105,7 @@ exports.getConversationPublicKeys = async (req, res) => {
 			publicKeys,
 		})
 	} catch (error) {
-		console.error('❌ Błąd pobierania kluczy konwersacji:', error)
+		console.error('Błąd pobierania kluczy konwersacji:', error)
 		res.status(500).json({ error: 'Błąd serwera' })
 	}
 }
@@ -128,7 +114,7 @@ exports.getGroupPublicKeys = async (req, res) => {
 	try {
 		const { groupId } = req.params
 
-		console.log('🔍 Fetching public keys for group:', groupId)
+		console.log('Fetching public keys for group:', groupId)
 
 		const members = await db.GroupMember.findAll({
 			where: {
@@ -138,7 +124,7 @@ exports.getGroupPublicKeys = async (req, res) => {
 			include: [
 				{
 					model: db.User,
-					as: 'user', // ✅ DODAJ TEN ALIAS (z małej litery!)
+					as: 'user',
 					attributes: ['user_id', 'username', 'public_key_dh'],
 				},
 			],
@@ -148,7 +134,7 @@ exports.getGroupPublicKeys = async (req, res) => {
 
 		const publicKeys = []
 		for (const member of members) {
-			console.log('🔑 Processing member:', {
+			console.log('Processing member:', {
 				memberId: member.user_id,
 				hasUser: !!member.user,
 				hasPublicKey: !!member.user?.public_key_dh,
@@ -163,13 +149,11 @@ exports.getGroupPublicKeys = async (req, res) => {
 			}
 		}
 
-		console.log('✅ Returning public keys:', publicKeys.length)
-
 		res.json({ publicKeys })
 	} catch (error) {
-		console.error('❌ Error fetching group public keys:')
-		console.error('   Message:', error.message)
-		console.error('   Stack:', error.stack)
+		console.error('Error fetching group public keys:')
+		console.error('Message:', error.message)
+		console.error('Stack:', error.stack)
 
 		res.status(500).json({
 			error: 'Failed to fetch group keys',
@@ -178,12 +162,10 @@ exports.getGroupPublicKeys = async (req, res) => {
 	}
 }
 
-// Dodaj też endpoint do zapisywania zaszyfrowanego group key
 exports.saveGroupKey = async (req, res) => {
 	try {
 		const { groupId, userId, encryptedGroupKey } = req.body
 
-		// Użyj userId z body lub z tokenu
 		const targetUserId = userId || req.user.userId
 
 		await db.GroupEncryptedKey.create({
@@ -199,7 +181,6 @@ exports.saveGroupKey = async (req, res) => {
 	}
 }
 
-// Endpoint do pobierania zaszyfrowanego klucza
 exports.getGroupKey = async (req, res) => {
 	try {
 		const { groupId } = req.params

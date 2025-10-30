@@ -20,7 +20,6 @@ const Register = () => {
 		setError('')
 		setLoading(true)
 
-		// Walidacja
 		if (username.length < 3) {
 			setError('Nazwa użytkownika musi mieć minimum 3 znaki')
 			setLoading(false)
@@ -33,7 +32,6 @@ const Register = () => {
 			return
 		}
 
-		// 1. Rejestracja użytkownika
 		const result = await register(username, password)
 
 		if (!result.success) {
@@ -42,7 +40,6 @@ const Register = () => {
 			return
 		}
 
-		// 2. ✅ Generuj klucze ECDH
 		try {
 			const { privateKey, publicKeyJwk } = await generateECDHKeyPair()
 
@@ -55,15 +52,12 @@ const Register = () => {
 
 			savePrivateKeyDHLocally(privateKeyJwk)
 
-			// ✅ Zapisz w Context
 			setPrivateKeyDH(privateKey)
-
-			console.log('✅ Klucze ECDH wygenerowane i zabezpieczone')
 
 			setRecoveryCode(result.data.recoveryCode)
 			setShowRecoveryCode(true)
 		} catch (error) {
-			console.error('❌ Błąd generowania kluczy:', error)
+			console.error('Błąd generowania kluczy:', error)
 			setError('Błąd generowania kluczy szyfrowania')
 			setLoading(false)
 			return

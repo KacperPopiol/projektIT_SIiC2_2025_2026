@@ -24,7 +24,6 @@ const Login = () => {
 		setError('')
 		setLoading(true)
 
-		// 1. Zaloguj użytkownika
 		const result = await login(username, password)
 
 		if (!result.success) {
@@ -33,29 +32,26 @@ const Login = () => {
 			return
 		}
 
-		// 2. ✅ Sprawdź czy istnieje klucz prywatny lokalnie
 		if (hasPrivateKeyDH()) {
 			try {
 				const privateKeyJwk = getPrivateKeyDHLocally()
 				const privateKey = await importPrivateKeyDH(privateKeyJwk)
 
-				// Zapisz w Context
 				setPrivateKeyDH(privateKey)
 
-				console.log('✅ Klucz prywatny DH załadowany z localStorage')
+				console.log('Klucz prywatny DH załadowany z localStorage')
 			} catch (error) {
-				console.error('❌ Błąd importu klucza:', error)
+				console.error('Błąd importu klucza:', error)
 			}
 		} else {
-			// 3. Brak klucza lokalnie - zapytaj o recovery
 			const shouldRecover = confirm(
-				'⚠️ Brak klucza prywatnego na tym urządzeniu.\n\n' + 'Pobrać backup z serwera? (wymagane hasło)'
+				'Brak klucza prywatnego na tym urządzeniu.\n\n' + 'Pobrać backup z serwera? (wymagane hasło)'
 			)
 
 			if (shouldRecover) {
 				await recoverPrivateKeyFromServer(password)
 			} else {
-				alert('❌ Bez klucza prywatnego nie możesz odszyfrować wiadomości!')
+				alert('Bez klucza prywatnego nie możesz odszyfrować wiadomości!')
 			}
 		}
 
@@ -65,36 +61,31 @@ const Login = () => {
 
 	const recoverPrivateKeyFromServer = async password => {
 		try {
-			console.log('📥 Pobieranie klucza prywatnego z serwera...')
-
 			const response = await keysApi.getEncryptedPrivateKeyDH()
 
 			if (!response.encryptedPrivateKey) {
-				alert('❌ Brak backupu klucza na serwerze')
+				alert('Brak backupu klucza na serwerze')
 				return
 			}
 
-			// Odszyfruj hasłem
 			const privateKeyString = decryptPrivateKeyDH(response.encryptedPrivateKey, password)
 
 			if (!privateKeyString) {
-				alert('❌ Nieprawidłowe hasło')
+				alert('Nieprawidłowe hasło')
 				return
 			}
 
-			// Zapisz lokalnie
 			const privateKeyJwk = JSON.parse(privateKeyString)
 			savePrivateKeyDHLocally(privateKeyJwk)
 
-			// Importuj do Context
 			const privateKey = await importPrivateKeyDH(privateKeyJwk)
 			setPrivateKeyDH(privateKey)
 
-			console.log('✅ Klucz prywatny odzyskany!')
-			alert('✅ Klucz prywatny odzyskany!')
+			console.log('Klucz prywatny odzyskany!')
+			alert('Klucz prywatny odzyskany!')
 		} catch (error) {
-			console.error('❌ Błąd odzyskiwania klucza:', error)
-			alert('❌ Nie udało się odzyskać klucza')
+			console.error('Błąd odzyskiwania klucza:', error)
+			alert('Nie udało się odzyskać klucza')
 		}
 	}
 

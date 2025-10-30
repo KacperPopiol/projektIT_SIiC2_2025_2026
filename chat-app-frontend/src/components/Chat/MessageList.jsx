@@ -28,7 +28,6 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 		scrollToBottom()
 	}, [messages])
 
-	// ✅ INICJALIZACJA SHARED SECRET (ECDH)
 	useEffect(() => {
 		if (conversation?.type === 'private' && privateKeyDH && conversation.conversationId) {
 			console.log('Inicjalizacja procedury uzyskiwania wspólnego sekretu ')
@@ -42,95 +41,71 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 
 	const initializeSharedSecret = async () => {
 		try {
-			console.log('🔑 START initializeSharedSecret')
-			console.log('- conversationId:', conversation.conversationId)
-			console.log('- privateKeyDH:', !!privateKeyDH)
-
 			setLoadingKeys(true)
 
 			let sharedSecret = await getCachedSharedSecret(conversation.conversationId)
 			console.log('- Cached secret:', !!sharedSecret)
 
 			if (!sharedSecret) {
-				console.log('⚠️ Pobieranie kluczy z API...')
-
 				const response = await keysApi.getConversationPublicKeys(conversation.conversationId)
-				console.log('- Odpowiedź API:', response)
-
 				const otherUser = response.publicKeys.find(k => k.userId !== user.userId)
-				console.log('- Drugi użytkownik:', otherUser)
 
 				if (!otherUser?.publicKey) {
-					console.error('❌ Brak klucza publicznego rozmówcy')
+					console.error('Brak klucza publicznego rozmówcy')
 					setLoadingKeys(false)
 					return
 				}
 
 				const otherPublicKeyJwk = JSON.parse(otherUser.publicKey)
-				console.log('- Klucz publiczny rozmówcy:', otherPublicKeyJwk)
-
-				console.log('🔄 Wyliczam shared secret...')
 				sharedSecret = await deriveSharedSecretAES(privateKeyDH, otherPublicKeyJwk)
-				console.log('- Shared secret wyliczony:', !!sharedSecret)
 
 				await cacheSharedSecret(conversation.conversationId, sharedSecret)
 			}
 
 			setSharedSecretAES(sharedSecret)
-			console.log('✅ Shared secret ustawiony')
+			console.log('Shared secret ustawiony')
 		} catch (error) {
-			console.error('❌ Błąd initializeSharedSecret:', error)
+			console.error('Błąd initializeSharedSecret:', error)
 			console.error('Stack:', error.stack)
 		} finally {
 			setLoadingKeys(false)
-			console.log('🔑 END initializeSharedSecret')
 		}
 	}
 
 	const initializeGroupKey = async () => {
 		try {
-			console.log('🔑 START initializeGroupKey')
 			setLoadingKeys(true)
 
-			// Sprawdź cache
 			let cachedKey = getCachedGroupKey(conversation.groupId)
 
 			if (cachedKey) {
-				console.log('✅ Group key from cache')
 				setGroupKey(cachedKey)
 				setLoadingKeys(false)
 				return
 			}
 
-			// Pobierz zaszyfrowany klucz z backendu
 			const response = await keysApi.getGroupKey(conversation.groupId)
 
 			if (!response.encryptedKey) {
-				console.error('❌ Brak klucza grupowego dla grupy')
+				console.error('Brak klucza grupowego dla grupy')
 				setLoadingKeys(false)
 				return
 			}
 
-			// Pobierz klucz publiczny twórcy grupy
 			const groupKeysResponse = await keysApi.getGroupPublicKeys(conversation.groupId)
-
-			// Znajdź twórcę grupy (pierwszego członka lub z metadanych)
-			// Opcja 1: Jeśli masz pole creatorId w conversation
 			const creatorId = conversation.creatorId
 
-			// Opcja 2: Jeśli nie masz creatorId, użyj pierwszego klucza
 			const creatorPublicKeyData =
 				groupKeysResponse.publicKeys.find(k => k.userId === creatorId) || groupKeysResponse.publicKeys[0]
 
 			if (!creatorPublicKeyData?.publicKey) {
-				console.error('❌ Brak klucza publicznego twórcy grupy')
+				console.error('Brak klucza publicznego twórcy grupy')
 				setLoadingKeys(false)
 				return
 			}
 
 			const creatorPublicKeyJwk = JSON.parse(creatorPublicKeyData.publicKey)
 
-			// Odszyfruj klucz grupowy
 			const decryptedGroupKey = await decryptGroupKey(
 				JSON.parse(response.encryptedKey),
 				creatorPublicKeyJwk,
@@ -139,15 +114,15 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 
 			cacheGroupKey(conversation.groupId, decryptedGroupKey)
 			setGroupKey(decryptedGroupKey)
-			console.log('✅ Group key ustawiony')
+			console.log('Group key ustawiony')
 		} catch (error) {
-			console.error('❌ Błąd initializeGroupKey:', error)
+			console.error('Błąd initializeGroupKey:', error)
 		} finally {
 			setLoadingKeys(false)
 		}
 	}
 
-	// ✅ DESZYFROWANIE WIADOMOŚCI
+	// DESZYFROWANIE WIADOMOŚCI
 	useEffect(() => {
 		if (conversation?.type !== 'private' || !sharedSecretAES) {
 			return
@@ -163,7 +138,7 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 						const plaintext = await decryptMessageWithSharedSecret(encryptedData, sharedSecretAES)
 						decrypted[msg.message_id] = plaintext
 					} catch (error) {
-						console.error(`❌ Błąd deszyfrowania wiadomości ${msg.message_id}:`, error)
+						console.error(`Błąd deszyfrowania wiadomości ${msg.message_id}:`, error)
 						decrypted[msg.message_id] = '[Nie można odszyfrować]'
 					}
 				}
@@ -184,60 +159,44 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 			const decrypted = {}
 
 			for (const msg of messages) {
-				// ✅ Sprawdź czy wiadomość jest zaszyfrowana
 				if (!msg.is_encrypted) {
-					continue // Pomiń nieszyfrowane
+					continue
 				}
 
-				// ✅ Sprawdź czy content istnieje
 				if (!msg.content) {
-					console.warn(`⚠️ Wiadomość ${msg.message_id} nie ma contentu`)
+					console.warn(`Wiadomość ${msg.message_id} nie ma contentu`)
 					decrypted[msg.message_id] = '[Brak treści]'
 					continue
 				}
 
 				try {
-					console.log(`🔓 Deszyfrowanie wiadomości ${msg.message_id}`)
-					console.log('   Raw content:', msg.content)
-
-					// ✅ Parse JSON
 					let encryptedData
 					try {
 						encryptedData = JSON.parse(msg.content)
 					} catch (parseError) {
-						console.error(`❌ Błąd parsowania JSON dla ${msg.message_id}:`, parseError)
+						console.error(`Błąd parsowania JSON dla ${msg.message_id}:`, parseError)
 						decrypted[msg.message_id] = '[Błąd parsowania]'
 						continue
 					}
 
-					// ✅ Sprawdź czy encryptedData jest obiektem (nie null!)
 					if (!encryptedData || typeof encryptedData !== 'object') {
-						console.error(`❌ encryptedData nie jest obiektem:`, encryptedData)
+						console.error(`encryptedData nie jest obiektem:`, encryptedData)
 						decrypted[msg.message_id] = '[Nieprawidłowe dane]'
 						continue
 					}
 
-					// ✅ Sprawdź czy ma wymagane pola
 					if (!encryptedData.ciphertext || !encryptedData.iv) {
-						console.error(`❌ Brak ciphertext lub iv:`, encryptedData)
+						console.error(`Brak ciphertext lub iv:`, encryptedData)
 						decrypted[msg.message_id] = '[Niepełne dane]'
 						continue
 					}
-
-					console.log('   ✅ Dane prawidłowe, deszyfrowanie...')
-
-					// ✅ Teraz możemy bezpiecznie odszyfrować
 					const plaintext = await decryptGroupMessage(encryptedData, groupKey)
-
-					console.log(`   ✅ Odszyfrowano: "${plaintext}"`)
 					decrypted[msg.message_id] = plaintext
 				} catch (error) {
-					console.error(`❌ Błąd deszyfrowania wiadomości ${msg.message_id}:`, error)
+					console.error(`Błąd deszyfrowania wiadomości ${msg.message_id}:`, error)
 					decrypted[msg.message_id] = '[Nie można odszyfrować]'
 				}
 			}
-
-			console.log('🔐 Odszyfrowane wiadomości:', Object.keys(decrypted).length)
 			setDecryptedMessages(decrypted)
 		}
 
@@ -253,7 +212,6 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 			setDeletingMessage(messageId)
 			await messagesApi.deleteMessage(messageId)
 
-			// Powiadom rodzica o usunięciu
 			if (onMessageDeleted) {
 				onMessageDeleted(messageId)
 			}
@@ -298,7 +256,7 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 				padding: '20px',
 				backgroundColor: '#f5f5f5',
 			}}>
-			{/* ✅ Status szyfrowania - PRIVATE */}
+			{/* Status szyfrowania - PRIVATE */}
 			{conversation?.type === 'private' && (
 				<div
 					style={{
@@ -321,7 +279,7 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 				</div>
 			)}
 
-			{/* ✅ Status szyfrowania - GROUP */}
+			{/* Status szyfrowania - GROUP */}
 			{conversation?.type === 'group' && (
 				<div
 					style={{
@@ -349,7 +307,6 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 				const isRead = message.readStatuses?.some(s => s.is_read)
 				const isDeleting = deletingMessage === message.message_id
 
-				// ✅ WYŚWIETL ODSZYFROWANĄ LUB PLAINTEXT TREŚĆ
 				const displayContent = (() => {
 					if (message.is_encrypted) {
 						if (decryptedMessages[message.message_id]) {
@@ -403,10 +360,10 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 								</div>
 							)}
 
-							{/* ✅ Treść wiadomości (odszyfrowana lub plaintext) */}
+							{/* Treść wiadomości (odszyfrowana lub plaintext) */}
 							<div style={{ fontSize: '14px', wordWrap: 'break-word' }}>{displayContent}</div>
 
-							{/* ✅ Ikona szyfrowania */}
+							{/* Ikona szyfrowania */}
 							{message.is_encrypted && (
 								<div
 									style={{

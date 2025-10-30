@@ -5,10 +5,6 @@ import { useAuth } from '../../hooks/useAuth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import { keysApi } from '../../api/keysApi'
-import { groupsApi } from '../../api/groupsApi' // <-- DODAJ
-
-import { generateGroupKey, exportGroupKey, encryptGroupKeyForUser, cacheGroupKey } from '../../utils/groupEncryption'
-import { getPrivateKeyDHLocally, importPrivateKeyDH } from '../../utils/encryption'
 
 const ChatWindow = ({ conversation }) => {
 	const [messages, setMessages] = useState([])
@@ -18,31 +14,11 @@ const ChatWindow = ({ conversation }) => {
 	const [menuLoading, setMenuLoading] = useState(false)
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
-	const [hasGroupKey, setHasGroupKey] = useState(false)
-	const [isSettingUp, setIsSettingUp] = useState(false)
 
 	// Ładowanie wiadomości przy zmianie konwersacji
 	useEffect(() => {
 		loadMessages()
 	}, [conversation.conversationId])
-
-	// Sprawdź czy grupa ma klucz
-	useEffect(() => {
-		const checkGroupKey = async () => {
-			if (!conversation?.groupId) return
-
-			try {
-				await keysApi.getGroupKey(conversation.groupId)
-				setHasGroupKey(true)
-			} catch (error) {
-				setHasGroupKey(false)
-			}
-		}
-
-		if (conversation?.type === 'group') {
-			checkGroupKey()
-		}
-	}, [conversation])
 
 	// Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
 	useEffect(() => {
@@ -50,20 +26,15 @@ const ChatWindow = ({ conversation }) => {
 
 		console.log('🔌 Setting up socket listeners for conversation:', conversation.conversationId)
 
-		// Dołącz do pokoju konwersacji
+		// Dołączenie do pokoju konwersacji
 		if (conversation.type === 'private') {
 			socket.emit('join_conversation', { conversationId: conversation.conversationId })
 		} else {
 			socket.emit('join_group', { groupId: conversation.groupId })
 		}
 
-		// Nasłuchuj na nowe wiadomości prywatne
+		// Nasłuchiwanie na nowe wiadomości prywatne
 		const handleNewPrivateMessage = data => {
-			console.log('🔵 SOCKET DATA RECEIVED:', data)
-			console.log('🔵 SOCKET DATA KEYS:', Object.keys(data))
-			console.log('🔵 isEncrypted value:', data.isEncrypted)
-			console.log('🔵 Full JSON:', JSON.stringify(data, null, 2))
-
 			if (data.conversationId === conversation.conversationId) {
 				setMessages(prev => [
 					...prev,
@@ -83,28 +54,7 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// useEffect(() => {
-		// 	const fetchConversations = async () => {
-		// 		try {
-		// 			const response = await api.get('/api/messages/conversations')
-		// 			console.log('🟢 API RESPONSE:', response.data)
-
-		// 			const conv = response.data.privateConversations.find(c => c.conversation.conversationId === conversationId)
-
-		// 			if (conv) {
-		// 				console.log('🟢 MESSAGES FROM API:', conv.conversation.messages)
-		// 				console.log('🟢 FIRST MESSAGE:', conv.conversation.messages[0])
-		// 				setMessages(conv.conversation.messages || [])
-		// 			}
-		// 		} catch (error) {
-		// 			console.error('Error fetching conversations:', error)
-		// 		}
-		// 	}
-
-		// 	fetchConversations()
-		// }, [conversation.conversationId])
-
-		// Nasłuchuj na nowe wiadomości grupowe
+		// Nasłuchiwanie na nowe wiadomości grupowe
 		const handleNewGroupMessage = data => {
 			console.log('📨 New group message received:', data)
 			if (data.conversationId === conversation.conversationId) {
@@ -126,7 +76,7 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// Nasłuchuj na statusy odczytania
+		// Nasłuchiwanie na statusy odczytania
 		const handleMessageRead = data => {
 			console.log('✅ Message read:', data)
 			setMessages(prev =>
@@ -149,7 +99,7 @@ const ChatWindow = ({ conversation }) => {
 			)
 		}
 
-		// Nasłuchuj na wskaźnik pisania
+		// Nasłuchiwanie na wskaźnik pisania
 		const handleUserTyping = data => {
 			if (data.conversationId === conversation.conversationId && data.userId !== user?.userId) {
 				setTypingUsers(prev => {
@@ -161,21 +111,21 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
-		// Nasłuchuj na przestanie pisać
+		// Nasłuchiwanie na przestanie pisanie
 		const handleUserStopTyping = data => {
 			if (data.conversationId === conversation.conversationId) {
 				setTypingUsers(prev => prev.filter(u => u.userId !== data.userId))
 			}
 		}
 
-		// Zarejestruj wszystkie listenery
+		// Listenery
 		socket.on('new_private_message', handleNewPrivateMessage)
 		socket.on('new_group_message', handleNewGroupMessage)
 		socket.on('message_read', handleMessageRead)
 		socket.on('user_typing', handleUserTyping)
 		socket.on('user_stop_typing', handleUserStopTyping)
 
-		// Cleanup - usuń listenery i opuść pokój
+		// Cleanup - usunięcie listenerów i opuszczenie pokoju
 		return () => {
 			console.log('🔌 Cleaning up socket listeners')
 			socket.off('new_private_message', handleNewPrivateMessage)
@@ -196,7 +146,7 @@ const ChatWindow = ({ conversation }) => {
 	useEffect(() => {
 		if (!socket || !connected || messages.length === 0) return
 
-		// Oznacz wszystkie nieprzeczytane wiadomości jako przeczytane
+		// Oznaczenie wszystkich nieprzeczytanych wiadomości jako przeczytane
 		messages.forEach(message => {
 			if (message.sender_id !== user?.userId) {
 				const isRead = message.readStatuses?.some(s => s.user_id === user?.userId && s.is_read)
@@ -207,6 +157,18 @@ const ChatWindow = ({ conversation }) => {
 		})
 	}, [messages, socket, connected, user])
 
+	useEffect(() => {
+		const handleClickOutside = event => {
+			if (showMenu && !event.target.closest('button')) {
+				setShowMenu(false)
+			}
+		}
+
+		document.addEventListener('click', handleClickOutside)
+		return () => document.removeEventListener('click', handleClickOutside)
+	}, [showMenu])
+
+	// Ładowanie wiadomości
 	const loadMessages = async () => {
 		try {
 			setLoading(true)
@@ -219,15 +181,17 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
 	const handleNewMessage = message => {
-		// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
 		setMessages(prev => [...prev, message])
 	}
+
+	// Usunięcie wiadomości z lokalnego stanu
 	const handleMessageDeleted = messageId => {
-		// Usuń wiadomość z lokalnego stanu
 		setMessages(prev => prev.filter(msg => msg.message_id !== messageId))
 	}
 
+	// Archiwizacja konwersacji
 	const handleArchiveConversation = async () => {
 		if (!confirm('Czy na pewno chcesz zarchiwizować tę konwersację?')) return
 
@@ -236,7 +200,6 @@ const ChatWindow = ({ conversation }) => {
 			await messagesApi.archiveConversation(conversation.conversationId)
 			alert('Konwersacja zarchiwizowana! Znajdziesz ją w archiwum.')
 			setShowMenu(false)
-			// Możesz dodać callback do rodzica aby odświeżył listę
 		} catch (err) {
 			alert('Błąd archiwizacji: ' + (err.response?.data?.error || err.message))
 		} finally {
@@ -244,6 +207,7 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	// Usunięcie chatu
 	const handleDeleteChat = async () => {
 		if (
 			!confirm('Czy na pewno chcesz usunąć CAŁĄ konwersację? Wszystkie wiadomości zostaną usunięte po Twojej stronie.')
@@ -255,7 +219,7 @@ const ChatWindow = ({ conversation }) => {
 			await messagesApi.deleteChat(conversation.conversationId)
 			alert('Konwersacja usunięta po Twojej stronie')
 			setShowMenu(false)
-			setMessages([]) // Wyczyść wiadomości lokalnie
+			setMessages([])
 		} catch (err) {
 			alert('Błąd usuwania: ' + (err.response?.data?.error || err.message))
 		} finally {
@@ -268,12 +232,10 @@ const ChatWindow = ({ conversation }) => {
 			setMenuLoading(true)
 			const response = await messagesApi.exportConversation(conversation.conversationId)
 
-			// Utwórz plik JSON do pobrania
 			const dataStr = JSON.stringify(response.data, null, 2)
 			const dataBlob = new Blob([dataStr], { type: 'application/json' })
 			const url = URL.createObjectURL(dataBlob)
 
-			// Utwórz link do pobrania
 			const link = document.createElement('a')
 			link.href = url
 			link.download = `chat-${conversation.name}-${Date.now()}.json`
@@ -290,80 +252,6 @@ const ChatWindow = ({ conversation }) => {
 			setMenuLoading(false)
 		}
 	}
-
-	const setupGroupEncryption = async () => {
-		if (!conversation?.groupId) {
-			alert('Błąd: Brak ID grupy')
-			return
-		}
-
-		setIsSettingUp(true)
-		try {
-			const groupId = conversation.groupId
-
-			// 1. Pobierz wszystkich członków grupy
-			const membersResponse = await groupsApi.getGroupMembers(groupId)
-			const members = membersResponse.members
-
-			// 2. Pobierz klucze publiczne wszystkich członków
-			const publicKeysResponse = await keysApi.getGroupPublicKeys(groupId)
-			const publicKeys = publicKeysResponse.publicKeys
-
-			// 3. Wygeneruj klucz grupowy
-			const groupKey = await generateGroupKey()
-			const groupKeyJwk = await exportGroupKey(groupKey)
-
-			// 4. Pobierz mój klucz prywatny
-			const myPrivateKeyJwk = getPrivateKeyDHLocally()
-			if (!myPrivateKeyJwk) {
-				throw new Error('Brak klucza prywatnego DH')
-			}
-			const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
-
-			// 5. Zaszyfruj klucz dla każdego członka
-			const encryptedKeys = []
-			for (const member of publicKeys) {
-				const userPublicKeyJwk = JSON.parse(member.publicKey)
-				const encryptedGroupKey = await encryptGroupKeyForUser(groupKeyJwk, userPublicKeyJwk, myPrivateKey)
-
-				encryptedKeys.push({
-					userId: member.userId,
-					encryptedKey: encryptedGroupKey,
-				})
-			}
-
-			// 6. Zapisz wszystkie zaszyfrowane klucze na serwerze
-			for (const encKey of encryptedKeys) {
-				await keysApi.saveGroupKey({
-					groupId: groupId,
-					userId: encKey.userId,
-					encryptedGroupKey: JSON.stringify(encKey.encryptedKey),
-				})
-			}
-
-			// 7. Zapisz lokalnie
-			cacheGroupKey(groupId, groupKey)
-			setHasGroupKey(true)
-
-			alert('Szyfrowanie grupowe skonfigurowane pomyślnie!')
-		} catch (error) {
-			console.error('❌ Błąd konfiguracji szyfrowania:', error)
-			alert('Błąd konfiguracji szyfrowania: ' + error.message)
-		} finally {
-			setIsSettingUp(false)
-		}
-	}
-
-	useEffect(() => {
-		const handleClickOutside = event => {
-			if (showMenu && !event.target.closest('button')) {
-				setShowMenu(false)
-			}
-		}
-
-		document.addEventListener('click', handleClickOutside)
-		return () => document.removeEventListener('click', handleClickOutside)
-	}, [showMenu])
 
 	return (
 		<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -490,32 +378,6 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
-					{/* Jeśli to grupa i nie ma klucza - pokaż komunikat */}
-					{conversation?.type === 'group' && !hasGroupKey && (
-						<div
-							style={{
-								padding: '10px',
-								backgroundColor: '#fff3cd',
-								borderBottom: '1px solid #ffc107',
-								textAlign: 'center',
-							}}>
-							⚠️ Szyfrowanie grupowe nie jest skonfigurowane
-							<button
-								onClick={setupGroupEncryption}
-								disabled={isSettingUp}
-								style={{
-									marginLeft: '10px',
-									padding: '5px 10px',
-									backgroundColor: '#007bff',
-									color: 'white',
-									border: 'none',
-									borderRadius: '5px',
-									cursor: isSettingUp ? 'not-allowed' : 'pointer',
-								}}>
-								{isSettingUp ? 'Konfiguracja...' : '🔐 Skonfiguruj szyfrowanie'}
-							</button>
-						</div>
-					)}
 					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} />
 
 					{/* Wskaźnik pisania */}
