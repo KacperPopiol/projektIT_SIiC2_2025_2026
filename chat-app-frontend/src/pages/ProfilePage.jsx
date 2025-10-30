@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { authApi } from '../api/authApi'
 import { storage } from '../utils/storage'
+import NotificationSettings from '../components/Settings/NotificationSettings'
 
 const ProfilePage = () => {
 	const navigate = useNavigate()
@@ -340,6 +341,15 @@ const ProfilePage = () => {
 						</p>
 					</div>
 				)}
+			</div>
+
+			{/* Ustawienia powiadomień */}
+			<div
+				style={{
+					marginTop: '20px',
+				}}
+			>
+				<NotificationSettings />
 			</div>
 
 			{/* Strefa niebezpieczna */}

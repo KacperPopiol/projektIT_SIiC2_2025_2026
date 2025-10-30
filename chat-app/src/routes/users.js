@@ -1,11 +1,13 @@
 const express = require('express')
 const router = express.Router()
 const { authenticateToken } = require('../middleware/auth')
+const userController = require('../controllers/userController')
 
 // Wszystkie trasy wymagają autentykacji
 router.use(authenticateToken)
 
-// Możesz dodać dodatkowe trasy związane z użytkownikami tutaj
-// Na przykład: zmiana hasła, ustawienia, itp.
+// Ustawienia powiadomień
+router.get('/notification-settings', userController.getNotificationSettings)
+router.put('/notification-settings', userController.updateNotificationSettings)
 
 module.exports = router

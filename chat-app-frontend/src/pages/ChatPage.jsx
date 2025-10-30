@@ -4,6 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useSocket } from '../hooks/useSocket'
 import { messagesApi } from '../api/messagesApi'
 import ChatWindow from '../components/Chat/ChatWindow'
+import { notificationUtils } from '../utils/notifications'
+import { useNotifications } from '../hooks/useNotifications'
 
 const ChatPage = () => {
 	const navigate = useNavigate()
@@ -18,12 +20,45 @@ const ChatPage = () => {
 		privateConversations: [],
 		groupConversations: [],
 	})
-	const [selectedConversation, setSelectedConversation] = useState(null)
-	const [loading, setLoading] = useState(true)
+    const [selectedConversation, setSelectedConversation] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const { requestPermission } = useNotifications()
 
 	useEffect(() => {
 		loadData()
 	}, [])
+
+// Prompt o uprawnienia przy pierwszym wejściu
+useEffect(() => {
+    const ask = async () => {
+        if (notificationUtils.getPermission() === 'default') {
+            const shouldAsk = confirm('Czy chcesz otrzymywać powiadomienia o nowych wiadomościach?')
+            if (shouldAsk) {
+                await requestPermission()
+            }
+        }
+    }
+    ask()
+}, [])
+
+// Deep-link do konwersacji z query params
+useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const convId = params.get('c')
+    const type = params.get('t')
+    const groupId = params.get('g')
+    if (convId && type) {
+        setSelectedConversation({
+            id: type === 'group' ? Number(groupId) : Number(convId),
+            type,
+            name: type === 'group' ? 'Grupa' : 'Rozmowa',
+            conversationId: Number(convId),
+            groupId: groupId ? Number(groupId) : undefined,
+        })
+        // wyczyść query po ustawieniu
+        window.history.replaceState(null, '', '/chat')
+    }
+}, [])
 
 	useEffect(() => {
 		if (!socket || !connected) return

@@ -37,6 +37,18 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.BOOLEAN,
 				defaultValue: false,
 			},
+			notifications_enabled: {
+				type: DataTypes.BOOLEAN,
+				defaultValue: true,
+			},
+			notify_private_messages: {
+				type: DataTypes.BOOLEAN,
+				defaultValue: true,
+			},
+			notify_group_messages: {
+				type: DataTypes.BOOLEAN,
+				defaultValue: true,
+			},
 			public_key_dh: {
 				type: DataTypes.TEXT,
 				allowNull: true,
