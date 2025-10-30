@@ -39,4 +39,8 @@ router.delete('/:groupId', groupController.deleteGroup)
 
 router.get('/:groupId', authenticateToken, groupController.getGroupDetails)
 
+router.post('/:groupId/initialize-encryption', groupController.initializeGroupEncryption)
+
+router.post('/:groupId/members/:memberId/add-key', groupController.addKeyForMember)
+
 module.exports = router

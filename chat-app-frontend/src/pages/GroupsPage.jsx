@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { groupsApi } from '../api/groupsApi'
 import { useAuth } from '../hooks/useAuth'
+import { generateGroupKey, exportGroupKey, cacheGroupKey, getCachedGroupKey } from '../utils/groupEncryption'
+import { getPrivateKeyDHLocally, importPrivateKeyDH } from '../utils/encryption'
+import { keysApi } from '../api/keysApi'
 
 const GroupsPage = () => {
 	const navigate = useNavigate()
@@ -67,11 +70,19 @@ const GroupsPage = () => {
 
 	const loadGroupDetails = async groupId => {
 		try {
-			// Zawsze pobierz członków (każdy członek ma dostęp)
+			// 1. Zawsze pobierz członków (każdy członek ma dostęp)
 			const membersRes = await groupsApi.getGroupMembers(groupId)
 			setGroupMembers(membersRes.members || [])
 
-			// ✅ Pobierz oczekujące prośby TYLKO jeśli jesteś twórcą
+			// 2. ✅ NOWE: Automatycznie załaduj klucz grupowy (jeśli istnieje)
+			try {
+				await loadGroupKeyIfNeeded(groupId)
+			} catch (keyError) {
+				console.warn('⚠️ Nie udało się załadować klucza grupowego:', keyError)
+				// Nie blokuj ładowania szczegółów grupy
+			}
+
+			// 3. Pobierz oczekujące prośby TYLKO jeśli jesteś twórcą
 			if (isGroupCreator(groupId)) {
 				try {
 					const pendingRes = await groupsApi.getPendingRequests(groupId)
@@ -81,7 +92,6 @@ const GroupsPage = () => {
 					setPendingRequests([])
 				}
 			} else {
-				// Jeśli nie jesteś twórcą, wyczyść listę oczekujących
 				setPendingRequests([])
 			}
 		} catch (err) {
@@ -89,14 +99,296 @@ const GroupsPage = () => {
 		}
 	}
 
+	/**
+	 * Automatycznie inicjalizuje szyfrowanie dla nowo utworzonej grupy
+	 */
+	const initializeGroupEncryptionAuto = async groupId => {
+		try {
+			console.log('🔐 Automatyczna inicjalizacja szyfrowania dla grupy:', groupId)
+
+			// 1. Pobierz członków grupy (na razie tylko twórca)
+			const membersResponse = await groupsApi.getGroupMembers(groupId)
+			const members = membersResponse.members
+
+			console.log(`👥 Znaleziono ${members.length} członków`)
+
+			// 2. Wygeneruj klucz grupowy (AES-256)
+			const groupKey = await generateGroupKey()
+			const groupKeyJwk = await exportGroupKey(groupKey)
+
+			console.log('🔑 Klucz grupowy wygenerowany')
+
+			// 3. Pobierz własny klucz prywatny ECDH
+			const myPrivateKeyJwk = getPrivateKeyDHLocally()
+			if (!myPrivateKeyJwk) {
+				throw new Error('Brak klucza prywatnego DH - zaloguj się ponownie')
+			}
+			const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+
+			// 4. Zaszyfruj klucz grupowy dla każdego członka
+			const encryptedKeys = []
+
+			for (const member of members) {
+				try {
+					// Pobierz klucz publiczny członka
+					const userKeyResponse = await keysApi.getPublicKeyDH(member.user_id)
+					const userPublicKeyJwk = JSON.parse(userKeyResponse.publicKey)
+
+					// Import klucza publicznego członka
+					const userPublicKey = await crypto.subtle.importKey(
+						'jwk',
+						userPublicKeyJwk,
+						{ name: 'ECDH', namedCurve: 'P-256' },
+						false,
+						[]
+					)
+
+					// Wylicz shared secret (ECDH)
+					const sharedSecret = await crypto.subtle.deriveBits(
+						{ name: 'ECDH', public: userPublicKey },
+						myPrivateKey,
+						256
+					)
+
+					// Derive AES key z shared secret
+					const aesKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'AES-GCM' }, false, ['encrypt'])
+
+					// Zaszyfruj klucz grupowy tym AES key
+					const iv = crypto.getRandomValues(new Uint8Array(12))
+					const encryptedGroupKey = await crypto.subtle.encrypt(
+						{ name: 'AES-GCM', iv: iv },
+						aesKey,
+						new TextEncoder().encode(JSON.stringify(groupKeyJwk))
+					)
+
+					// Dodaj do listy
+					encryptedKeys.push({
+						userId: member.user_id,
+						encryptedKey: JSON.stringify({
+							ciphertext: btoa(String.fromCharCode(...new Uint8Array(encryptedGroupKey))),
+							iv: btoa(String.fromCharCode(...iv)),
+						}),
+					})
+
+					console.log(`✅ Klucz zaszyfrowany dla ${member.user.username}`)
+				} catch (memberError) {
+					console.error(`❌ Błąd szyfrowania dla członka ${member.user_id}:`, memberError)
+				}
+			}
+
+			// 5. Wyślij zaszyfrowane klucze do backendu
+			await groupsApi.initializeGroupEncryption(groupId, encryptedKeys)
+
+			// 6. Zapisz klucz grupowy lokalnie
+			await cacheGroupKey(groupId, groupKey)
+
+			console.log('✅ Szyfrowanie grupowe zainicjalizowane automatycznie')
+			return true
+		} catch (error) {
+			console.error('❌ Błąd automatycznej inicjalizacji szyfrowania:', error)
+			throw error
+		}
+	}
+
+	const addGroupKeyForNewMember = async (groupId, memberId) => {
+		try {
+			console.log(`🔑 Dodawanie klucza dla nowego członka ${memberId}`)
+
+			// 1. Pobierz klucz grupowy z cache
+			let groupKey = getCachedGroupKey(groupId)
+
+			if (!groupKey) {
+				console.warn('⚠️ Brak klucza grupowego w cache - pobieranie z serwera')
+				groupKey = await loadGroupKeyIfNeeded(groupId)
+			}
+
+			// 2. Eksportuj klucz grupowy
+			const groupKeyJwk = await exportGroupKey(groupKey)
+
+			// 3. Pobierz klucz publiczny nowego członka
+			const userKeyResponse = await keysApi.getPublicKeyDH(memberId)
+			const userPublicKeyJwk = JSON.parse(userKeyResponse.publicKey)
+
+			// 4. Pobierz własny klucz prywatny
+			const myPrivateKeyJwk = getPrivateKeyDHLocally()
+			if (!myPrivateKeyJwk) {
+				throw new Error('Brak klucza prywatnego DH')
+			}
+			const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+
+			// 5. Import klucza publicznego członka
+			const userPublicKey = await crypto.subtle.importKey(
+				'jwk',
+				userPublicKeyJwk,
+				{ name: 'ECDH', namedCurve: 'P-256' },
+				false,
+				[]
+			)
+
+			// 6. Wylicz shared secret
+			const sharedSecret = await crypto.subtle.deriveBits({ name: 'ECDH', public: userPublicKey }, myPrivateKey, 256)
+
+			// 7. Derive AES key
+			const aesKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'AES-GCM' }, false, ['encrypt'])
+
+			// 8. Zaszyfruj klucz grupowy
+			const iv = crypto.getRandomValues(new Uint8Array(12))
+			const encryptedGroupKey = await crypto.subtle.encrypt(
+				{ name: 'AES-GCM', iv: iv },
+				aesKey,
+				new TextEncoder().encode(JSON.stringify(groupKeyJwk))
+			)
+
+			const encryptedKeyData = JSON.stringify({
+				ciphertext: btoa(String.fromCharCode(...new Uint8Array(encryptedGroupKey))),
+				iv: btoa(String.fromCharCode(...iv)),
+			})
+
+			// 9. Wyślij do backendu
+			await groupsApi.addKeyForMember(groupId, memberId, encryptedKeyData)
+
+			console.log(`✅ Klucz dodany dla członka ${memberId}`)
+			return true
+		} catch (error) {
+			console.error(`❌ Błąd dodawania klucza dla członka ${memberId}:`, error)
+			throw error
+		}
+	}
+
+	const loadGroupKeyIfNeeded = async groupId => {
+		try {
+			console.log(`🔑 Sprawdzanie klucza grupowego dla grupy ${groupId}`)
+
+			// 1. Sprawdź cache lokalny
+			let groupKey = await getCachedGroupKey(groupId)
+
+			if (groupKey) {
+				console.log(`✅ Klucz grupowy załadowany z cache dla grupy ${groupId}`)
+				return groupKey
+			}
+
+			console.log(`⚠️ Brak klucza w cache - pobieranie z serwera...`)
+
+			// 2. Pobierz zaszyfrowany klucz z serwera
+			try {
+				const response = await keysApi.getGroupKey(groupId)
+
+				if (!response.encryptedKey) {
+					console.warn(`⚠️ Grupa ${groupId} nie ma skonfigurowanego szyfrowania`)
+					return null
+				}
+
+				// 3. Parse zaszyfrowanych danych
+				let encryptedKeyData
+				if (typeof response.encryptedKey === 'string') {
+					encryptedKeyData = JSON.parse(response.encryptedKey)
+				} else {
+					encryptedKeyData = response.encryptedKey
+				}
+
+				console.log(`🔐 Zaszyfrowany klucz pobrany z serwera`)
+
+				// 4. Pobierz klucz publiczny twórcy grupy
+				const groupDetails = await groupsApi.getGroupDetails(groupId)
+
+				if (!groupDetails.group?.creator?.public_key_dh) {
+					throw new Error('Brak klucza publicznego twórcy grupy')
+				}
+
+				const creatorPublicKeyJwk = JSON.parse(groupDetails.group.creator.public_key_dh)
+				console.log(`👤 Klucz publiczny twórcy pobrany`)
+
+				// 5. Pobierz własny klucz prywatny
+				const myPrivateKeyJwk = getPrivateKeyDHLocally()
+				if (!myPrivateKeyJwk) {
+					throw new Error('Brak klucza prywatnego DH')
+				}
+				const myPrivateKey = await importPrivateKeyDH(myPrivateKeyJwk)
+				console.log(`🔑 Klucz prywatny zaimportowany`)
+
+				// 6. Import klucza publicznego twórcy
+				const creatorPublicKey = await crypto.subtle.importKey(
+					'jwk',
+					creatorPublicKeyJwk,
+					{ name: 'ECDH', namedCurve: 'P-256' },
+					false,
+					[]
+				)
+
+				// 7. Wylicz shared secret z twórcą grupy (ECDH)
+				const sharedSecret = await crypto.subtle.deriveBits(
+					{ name: 'ECDH', public: creatorPublicKey },
+					myPrivateKey,
+					256
+				)
+				console.log(`🔐 Shared secret wyliczony`)
+
+				// 8. Derive AES key z shared secret
+				const aesKey = await crypto.subtle.importKey('raw', sharedSecret, { name: 'AES-GCM' }, false, ['decrypt'])
+
+				// 9. Odszyfruj klucz grupowy
+				const iv = Uint8Array.from(atob(encryptedKeyData.iv), c => c.charCodeAt(0))
+				const ciphertext = Uint8Array.from(atob(encryptedKeyData.ciphertext), c => c.charCodeAt(0))
+
+				const decryptedData = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, aesKey, ciphertext)
+
+				// 10. Przekonwertuj odszyfrowane dane na string (to jest JWK)
+				const decryptedString = new TextDecoder().decode(decryptedData)
+				console.log(`📝 Odszyfrowano klucz grupowy`)
+
+				// 11. Parse JSON do obiektu JWK
+				const groupKeyJwk = JSON.parse(decryptedString)
+
+				// 12. Importuj klucz AES z JWK
+				const groupKeyObject = await crypto.subtle.importKey('jwk', groupKeyJwk, { name: 'AES-GCM' }, true, [
+					'encrypt',
+					'decrypt',
+				])
+
+				// 13. Zapisz w cache
+				await cacheGroupKey(groupId, groupKeyObject)
+
+				console.log(`✅ Klucz grupowy odszyfrowany i zapisany dla grupy ${groupId}`)
+				return groupKeyObject
+			} catch (error) {
+				if (error.response?.status === 404) {
+					console.warn(`⚠️ Klucz grupowy nie istnieje dla grupy ${groupId}`)
+					return null
+				}
+				throw error
+			}
+		} catch (error) {
+			console.error(`❌ Błąd ładowania klucza grupowego dla grupy ${groupId}:`, error)
+			throw error
+		}
+	}
+
 	const handleCreateGroup = async e => {
 		e.preventDefault()
 		try {
 			setError('')
-			await groupsApi.createGroup(groupName)
+
+			console.log('📝 Tworzenie grupy:', groupName)
+
+			// 1. Utwórz grupę
+			const response = await groupsApi.createGroup(groupName)
+			const newGroupId = response.group.groupId
+
+			console.log('✅ Grupa utworzona:', newGroupId)
+
 			setShowCreateGroup(false)
 			setGroupName('')
-			alert('Grupa utworzona pomyślnie!')
+
+			// 2. ✅ Automatycznie zainicjalizuj szyfrowanie
+			try {
+				await initializeGroupEncryptionAuto(newGroupId)
+				alert('✅ Grupa utworzona i zabezpieczona end-to-end!')
+			} catch (encryptError) {
+				console.error('⚠️ Błąd inicjalizacji szyfrowania:', encryptError)
+				alert('⚠️ Grupa utworzona, ale nie udało się skonfigurować szyfrowania.\nMożesz to zrobić później ręcznie.')
+			}
+
+			// 3. Odśwież listę grup
 			await loadGroups()
 		} catch (err) {
 			setError(err.response?.data?.error || 'Nie udało się utworzyć grupy')
@@ -134,11 +426,23 @@ const GroupsPage = () => {
 
 	const handleAcceptMember = async (groupId, memberId) => {
 		try {
+			setLoading(true)
+
 			await groupsApi.acceptMember(groupId, memberId)
-			alert('Członek zaakceptowany!')
+
+			try {
+				await addGroupKeyForNewMember(groupId, memberId)
+				alert('✅ Członek zaakceptowany i otrzymał klucz szyfrowania!')
+			} catch (keyError) {
+				console.error('⚠️ Błąd dodawania klucza:', keyError)
+				alert('⚠️ Członek zaakceptowany, ale nie udało się dodać klucza szyfrowania')
+			}
+
 			await loadGroupDetails(groupId)
-		} catch (err) {
-			alert('Błąd akceptacji członka')
+		} catch (error) {
+			alert('Błąd akceptacji: ' + (error.response?.data?.error || error.message))
+		} finally {
+			setLoading(false)
 		}
 	}
 
@@ -283,10 +587,10 @@ const GroupsPage = () => {
 				{showCreateGroup && (
 					<form onSubmit={handleCreateGroup} style={{ marginBottom: '20px' }}>
 						<input
-							type='text'
+							type="text"
 							value={groupName}
 							onChange={e => setGroupName(e.target.value)}
-							placeholder='Nazwa grupy'
+							placeholder="Nazwa grupy"
 							style={{
 								width: '100%',
 								padding: '10px',
@@ -297,7 +601,7 @@ const GroupsPage = () => {
 							required
 						/>
 						<button
-							type='submit'
+							type="submit"
 							style={{
 								width: '100%',
 								padding: '10px',
@@ -316,10 +620,10 @@ const GroupsPage = () => {
 				{showJoinGroup && (
 					<form onSubmit={handleJoinGroup} style={{ marginBottom: '20px' }}>
 						<input
-							type='text'
+							type="text"
 							value={inviteCode}
 							onChange={e => setInviteCode(e.target.value.toUpperCase())}
-							placeholder='Kod zaproszenia'
+							placeholder="Kod zaproszenia"
 							maxLength={6}
 							style={{
 								width: '100%',
@@ -334,7 +638,7 @@ const GroupsPage = () => {
 							required
 						/>
 						<button
-							type='submit'
+							type="submit"
 							style={{
 								width: '100%',
 								padding: '10px',
@@ -400,10 +704,10 @@ const GroupsPage = () => {
 						{editingGroupName ? (
 							<div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
 								<input
-									type='text'
+									type="text"
 									value={newGroupName}
 									onChange={e => setNewGroupName(e.target.value)}
-									placeholder='Nowa nazwa grupy'
+									placeholder="Nowa nazwa grupy"
 									style={{
 										flex: 1,
 										padding: '10px',
