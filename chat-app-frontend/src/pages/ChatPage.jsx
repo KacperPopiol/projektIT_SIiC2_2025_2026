@@ -668,7 +668,7 @@ const ChatPage = () => {
 							) : (
 								conversations.groupConversations.map(groupMember => {
 									const group = groupMember.group
-									const lastMessage = group?.conversation?.messages?.[0]
+									const lastMessage = ""
 									const isSelected = selectedConversation?.id === group?.group_id
 
 									return (
