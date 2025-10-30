@@ -49,4 +49,18 @@ export const storage = {
 	clearAll: () => {
 		localStorage.clear()
 	},
+
+	// Notification settings (cache)
+	setNotificationSettings: settings => {
+		localStorage.setItem('notificationSettings', JSON.stringify(settings))
+	},
+
+	getNotificationSettings: () => {
+		const settings = localStorage.getItem('notificationSettings')
+		return settings ? JSON.parse(settings) : null
+	},
+
+	removeNotificationSettings: () => {
+		localStorage.removeItem('notificationSettings')
+	},
 }

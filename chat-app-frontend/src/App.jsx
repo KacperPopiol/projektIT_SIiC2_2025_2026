@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 import ProtectedRoute from './components/Common/ProtectedRoute'
 import ContactsPage from './pages/ContactsPage'
 import GroupsPage from './pages/GroupsPage'
@@ -19,7 +20,8 @@ function App() {
 		<BrowserRouter>
 			<AuthProvider>
 				<SocketProvider>
-					<Routes>
+					<NotificationProvider>
+						<Routes>
 						{/* Publiczne trasy */}
 						<Route path='/' element={<HomePage />} />
 						<Route path='/login' element={<LoginPage />} />
@@ -64,6 +66,7 @@ function App() {
 						{/* Przekierowanie dla nieistniejących tras */}
 						<Route path='*' element={<Navigate to='/' replace />} />
 					</Routes>
+					</NotificationProvider>
 				</SocketProvider>
 			</AuthProvider>
 		</BrowserRouter>

@@ -114,7 +114,7 @@ const startServer = async () => {
 		// Synchronizuj modele z bazą danych
 		// force: false - nie usuwa istniejących tabel
 		// alter: true - aktualizuje strukturę tabel (użyj ostrożnie w produkcji)
-		await db.sequelize.sync({ force: false, alter: false })
+		await db.sequelize.sync({ force: false, alter: true })
 		console.log('✅ Database synchronized successfully')
 
 		// Uruchom serwer HTTP
