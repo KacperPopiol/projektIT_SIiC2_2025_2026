@@ -20,45 +20,45 @@ const ChatPage = () => {
 		privateConversations: [],
 		groupConversations: [],
 	})
-    const [selectedConversation, setSelectedConversation] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const { requestPermission } = useNotifications()
+	const [selectedConversation, setSelectedConversation] = useState(null)
+	const [loading, setLoading] = useState(true)
+	const { requestPermission } = useNotifications()
 
 	useEffect(() => {
 		loadData()
 	}, [])
 
-// Prompt o uprawnienia przy pierwszym wejściu
-useEffect(() => {
-    const ask = async () => {
-        if (notificationUtils.getPermission() === 'default') {
-            const shouldAsk = confirm('Czy chcesz otrzymywać powiadomienia o nowych wiadomościach?')
-            if (shouldAsk) {
-                await requestPermission()
-            }
-        }
-    }
-    ask()
-}, [])
+	// Prompt o uprawnienia przy pierwszym wejściu
+	useEffect(() => {
+		const ask = async () => {
+			if (notificationUtils.getPermission() === 'default') {
+				const shouldAsk = confirm('Czy chcesz otrzymywać powiadomienia o nowych wiadomościach?')
+				if (shouldAsk) {
+					await requestPermission()
+				}
+			}
+		}
+		ask()
+	}, [])
 
-// Deep-link do konwersacji z query params
-useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const convId = params.get('c')
-    const type = params.get('t')
-    const groupId = params.get('g')
-    if (convId && type) {
-        setSelectedConversation({
-            id: type === 'group' ? Number(groupId) : Number(convId),
-            type,
-            name: type === 'group' ? 'Grupa' : 'Rozmowa',
-            conversationId: Number(convId),
-            groupId: groupId ? Number(groupId) : undefined,
-        })
-        // wyczyść query po ustawieniu
-        window.history.replaceState(null, '', '/chat')
-    }
-}, [])
+	// Deep-link do konwersacji z query params
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search)
+		const convId = params.get('c')
+		const type = params.get('t')
+		const groupId = params.get('g')
+		if (convId && type) {
+			setSelectedConversation({
+				id: type === 'group' ? Number(groupId) : Number(convId),
+				type,
+				name: type === 'group' ? 'Grupa' : 'Rozmowa',
+				conversationId: Number(convId),
+				groupId: groupId ? Number(groupId) : undefined,
+			})
+			// wyczyść query po ustawieniu
+			window.history.replaceState(null, '', '/chat')
+		}
+	}, [])
 
 	useEffect(() => {
 		if (!socket || !connected) return
@@ -567,7 +567,7 @@ useEffect(() => {
 							) : (
 								conversations.privateConversations.map(conv => {
 									const otherUser = conv.conversation?.participants?.[0]?.user
-									const lastMessage = conv.conversation?.messages?.[0]
+									const lastMessage = ''
 									const isSelected = selectedConversation?.id === conv.conversation_id
 
 									return (
@@ -703,7 +703,7 @@ useEffect(() => {
 							) : (
 								conversations.groupConversations.map(groupMember => {
 									const group = groupMember.group
-									const lastMessage = ""
+									const lastMessage = ''
 									const isSelected = selectedConversation?.id === group?.group_id
 
 									return (

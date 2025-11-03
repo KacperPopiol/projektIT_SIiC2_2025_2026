@@ -44,15 +44,7 @@ const Login = () => {
 				console.error('Błąd importu klucza:', error)
 			}
 		} else {
-			const shouldRecover = confirm(
-				'Brak klucza prywatnego na tym urządzeniu.\n\n' + 'Pobrać backup z serwera? (wymagane hasło)'
-			)
-
-			if (shouldRecover) {
-				await recoverPrivateKeyFromServer(password)
-			} else {
-				alert('Bez klucza prywatnego nie możesz odszyfrować wiadomości!')
-			}
+			await recoverPrivateKeyFromServer(password)
 		}
 
 		setLoading(false)
@@ -64,14 +56,12 @@ const Login = () => {
 			const response = await keysApi.getEncryptedPrivateKeyDH()
 
 			if (!response.encryptedPrivateKey) {
-				alert('Brak backupu klucza na serwerze')
 				return
 			}
 
 			const privateKeyString = decryptPrivateKeyDH(response.encryptedPrivateKey, password)
 
 			if (!privateKeyString) {
-				alert('Nieprawidłowe hasło')
 				return
 			}
 
@@ -82,10 +72,8 @@ const Login = () => {
 			setPrivateKeyDH(privateKey)
 
 			console.log('Klucz prywatny odzyskany!')
-			alert('Klucz prywatny odzyskany!')
 		} catch (error) {
 			console.error('Błąd odzyskiwania klucza:', error)
-			alert('Nie udało się odzyskać klucza')
 		}
 	}
 
