@@ -6,6 +6,7 @@ require('dotenv').config()
 
 const db = require('./src/models')
 const socketHandler = require('./src/socket/socketHandler')
+const disappearingMessagesScheduler = require('./src/utils/disappearingMessagesScheduler')
 
 // Import tras
 const authRoutes = require('./src/routes/auth')
@@ -104,6 +105,9 @@ app.use((err, req, res, next) => {
 
 socketHandler(io)
 
+// Dodaj io do app locals aby kontrolery miały dostęp
+app.set('io', io)
+
 // ==================== URUCHOMIENIE SERWERA ====================
 
 const PORT = process.env.PORT || 3000
@@ -113,9 +117,12 @@ const startServer = async () => {
 	try {
 		// Synchronizuj modele z bazą danych
 		// force: false - nie usuwa istniejących tabel
-		// alter: true - aktualizuje strukturę tabel (użyj ostrożnie w produkcji)
-		await db.sequelize.sync({ force: false, alter: true })
+		// alter: false - nie aktualizuje struktury tabel (zmienione na false aby uniknąć problemu z limitem indeksów MySQL)
+		await db.sequelize.sync({ force: false, alter: false })
 		console.log('✅ Database synchronized successfully')
+
+		// Uruchom scheduler znikających wiadomości (przekaż io instance)
+		disappearingMessagesScheduler.start(io)
 
 		// Uruchom serwer HTTP
 		server.listen(PORT, () => {
@@ -151,6 +158,7 @@ const startServer = async () => {
 // Obsługa zamykania serwera
 process.on('SIGINT', async () => {
 	console.log('\n\n🛑 Shutting down server...')
+	disappearingMessagesScheduler.stop()
 	await db.sequelize.close()
 	console.log('✅ Database connection closed')
 	process.exit(0)
@@ -158,6 +166,7 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
 	console.log('\n\n🛑 Shutting down server...')
+	disappearingMessagesScheduler.stop()
 	await db.sequelize.close()
 	console.log('✅ Database connection closed')
 	process.exit(0)

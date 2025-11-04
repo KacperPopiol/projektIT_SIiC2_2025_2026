@@ -25,4 +25,8 @@ router.delete('/conversations/:conversationId', messageController.deleteChat)
 // Usuwanie pojedynczej wiadomości
 router.delete('/:messageId', messageController.deleteMessage)
 
+// Znikające wiadomości
+router.put('/conversations/:conversationId/disappearing', messageController.toggleDisappearingMessages)
+router.get('/conversations/:conversationId/settings', messageController.getConversationSettings)
+
 module.exports = router

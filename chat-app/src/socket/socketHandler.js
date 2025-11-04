@@ -107,18 +107,58 @@ module.exports = io => {
 					is_encrypted: isEncrypted,
 				})
 
+				// Pobierz ustawienia konwersacji (czy tryb znikających włączony)
+				const conversationSettings = await db.Conversation.findByPk(conversationId, {
+					attributes: [
+						'disappearing_messages_enabled',
+						'disappearing_messages_enabled_at',
+						'disappearing_messages_enabled_by',
+					],
+				})
+
 				// Pobierz uczestników konwersacji
 				const participants = await db.ConversationParticipant.findAll({
 					where: { conversation_id: conversationId },
 				})
 
-				// Utwórz statusy odczytania dla wszystkich uczestników (oprócz nadawcy)
+				// Sprawdź czy tryb znikających jest włączony i czy wiadomość została wysłana po włączeniu
+				let deleteAtSender = null
+				if (
+					conversationSettings?.disappearing_messages_enabled &&
+					conversationSettings?.disappearing_messages_enabled_at &&
+					conversationSettings?.disappearing_messages_enabled_by &&
+					new Date(message.created_at) >= new Date(conversationSettings.disappearing_messages_enabled_at)
+				) {
+					// Pobierz czas znikania użytkownika który włączył tryb
+					const enabledByUser = await db.User.findByPk(conversationSettings.disappearing_messages_enabled_by, {
+						attributes: ['default_disappearing_time'],
+					})
+
+					if (enabledByUser && enabledByUser.default_disappearing_time) {
+						// Dla nadawcy: delete_at = created_at + czas znikania (wysyłający "czyta" wiadomość od razu)
+						deleteAtSender = new Date(
+							new Date(message.created_at).getTime() + enabledByUser.default_disappearing_time * 1000
+						)
+					}
+				}
+
+				// Utwórz statusy odczytania dla wszystkich uczestników (włącznie z nadawcą jeśli tryb znikających włączony)
 				for (const participant of participants) {
 					if (participant.user_id !== socket.userId) {
+						// Dla odbiorców: is_read = false (będzie true gdy przeczytają)
 						await db.MessageReadStatus.create({
 							message_id: message.message_id,
 							user_id: participant.user_id,
 							is_read: false,
+						})
+					} else if (deleteAtSender !== null) {
+						// Dla nadawcy: is_read = true i delete_at ustawiony (wysyłający "czyta" wiadomość od razu)
+						await db.MessageReadStatus.create({
+							message_id: message.message_id,
+							user_id: socket.userId,
+							is_read: true,
+							read_at: message.created_at,
+							delete_at: deleteAtSender,
 						})
 					}
 				}
@@ -218,6 +258,15 @@ module.exports = io => {
 					recipient_keys: encrypted ? JSON.stringify(recipientKeys) : null,
 				})
 
+				// Pobierz ustawienia konwersacji (czy tryb znikających włączony)
+				const conversationSettings = await db.Conversation.findByPk(conversationId, {
+					attributes: [
+						'disappearing_messages_enabled',
+						'disappearing_messages_enabled_at',
+						'disappearing_messages_enabled_by',
+					],
+				})
+
 				// Pobierz członków grupy
 				const groupMembers = await db.GroupMember.findAll({
 					where: {
@@ -225,6 +274,27 @@ module.exports = io => {
 						status: 'accepted',
 					},
 				})
+
+				// Sprawdź czy tryb znikających jest włączony i czy wiadomość została wysłana po włączeniu
+				let deleteAtSender = null
+				if (
+					conversationSettings?.disappearing_messages_enabled &&
+					conversationSettings?.disappearing_messages_enabled_at &&
+					conversationSettings?.disappearing_messages_enabled_by &&
+					new Date(message.created_at) >= new Date(conversationSettings.disappearing_messages_enabled_at)
+				) {
+					// Pobierz czas znikania użytkownika który włączył tryb
+					const enabledByUser = await db.User.findByPk(conversationSettings.disappearing_messages_enabled_by, {
+						attributes: ['default_disappearing_time'],
+					})
+
+					if (enabledByUser && enabledByUser.default_disappearing_time) {
+						// Dla nadawcy: delete_at = created_at + czas znikania (wysyłający "czyta" wiadomość od razu)
+						deleteAtSender = new Date(
+							new Date(message.created_at).getTime() + enabledByUser.default_disappearing_time * 1000
+						)
+					}
+				}
 
 				// Utwórz statusy odczytania
 				const readStatuses = groupMembers
@@ -234,6 +304,17 @@ module.exports = io => {
 						user_id: m.user_id,
 						is_read: false,
 					}))
+
+				// Dodaj status dla nadawcy jeśli tryb znikających włączony
+				if (deleteAtSender !== null) {
+					readStatuses.push({
+						message_id: message.message_id,
+						user_id: socket.userId,
+						is_read: true,
+						read_at: message.created_at,
+						delete_at: deleteAtSender,
+					})
+				}
 
 				if (readStatuses.length > 0) {
 					await db.MessageReadStatus.bulkCreate(readStatuses)
@@ -298,31 +379,72 @@ module.exports = io => {
 		socket.on('mark_message_read', async data => {
 			try {
 				const { messageId } = data
+				const readAt = new Date()
 
-				// Zaktualizuj status odczytania
-				const [updated] = await db.MessageReadStatus.update(
-					{
-						is_read: true,
-						read_at: new Date(),
-					},
-					{
-						where: {
-							message_id: messageId,
-							user_id: socket.userId,
+				// Pobierz wiadomość i konwersację
+				const message = await db.Message.findByPk(messageId, {
+					include: [
+						{
+							model: db.Conversation,
+							as: 'conversation',
+							attributes: [
+								'conversation_id',
+								'disappearing_messages_enabled',
+								'disappearing_messages_enabled_at',
+								'disappearing_messages_enabled_by',
+							],
 						},
+					],
+				})
+
+				if (!message) {
+					return
+				}
+
+				// Sprawdź czy tryb znikających jest włączony i czy wiadomość została wysłana po włączeniu
+				let deleteAt = null
+				if (
+					message.conversation?.disappearing_messages_enabled &&
+					message.conversation?.disappearing_messages_enabled_at &&
+					message.conversation?.disappearing_messages_enabled_by &&
+					new Date(message.created_at) >= new Date(message.conversation.disappearing_messages_enabled_at)
+				) {
+					// Pobierz domyślny czas znikania użytkownika który WŁĄCZYŁ tryb (nie tego który czyta)
+					const enabledByUser = await db.User.findByPk(message.conversation.disappearing_messages_enabled_by, {
+						attributes: ['default_disappearing_time'],
+					})
+
+					if (enabledByUser && enabledByUser.default_disappearing_time) {
+						// Oblicz delete_at = read_at + default_disappearing_time użytkownika który włączył tryb
+						deleteAt = new Date(readAt.getTime() + enabledByUser.default_disappearing_time * 1000)
 					}
-				)
+				}
+
+				// Zaktualizuj status odczytania z delete_at jeśli potrzebne
+				const updateData = {
+					is_read: true,
+					read_at: readAt,
+				}
+
+				if (deleteAt) {
+					updateData.delete_at = deleteAt
+				}
+
+				const [updated] = await db.MessageReadStatus.update(updateData, {
+					where: {
+						message_id: messageId,
+						user_id: socket.userId,
+					},
+				})
 
 				if (updated) {
-					// Pobierz informację o nadawcy wiadomości
-					const message = await db.Message.findByPk(messageId)
-
 					// Powiadom nadawcę o przeczytaniu wiadomości
 					io.to(`user:${message.sender_id}`).emit('message_read', {
 						messageId,
 						readBy: socket.userId,
 						readByUsername: socket.username,
-						readAt: new Date(),
+						readAt: readAt,
+						deleteAt: deleteAt,
 					})
 				}
 			} catch (error) {
@@ -388,6 +510,135 @@ module.exports = io => {
 				socket.to(`group:${groupId}`).emit('user_stop_typing', typingData)
 			} else {
 				socket.to(`conversation:${conversationId}`).emit('user_stop_typing', typingData)
+			}
+		})
+
+		// ==================== ZNIKAJĄCE WIADOMOŚCI ====================
+		socket.on('toggle_disappearing_messages', async data => {
+			try {
+				const { conversationId, enabled } = data
+
+				if (!conversationId || typeof enabled !== 'boolean') {
+					socket.emit('error', {
+						message: 'Brak wymaganych danych (conversationId lub enabled)',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				// Sprawdź czy konwersacja istnieje
+				const conversation = await db.Conversation.findByPk(conversationId)
+
+				if (!conversation) {
+					socket.emit('error', {
+						message: 'Konwersacja nie znaleziona',
+						code: 'NOT_FOUND',
+					})
+					return
+				}
+
+				// Sprawdź dostęp użytkownika do konwersacji
+				if (conversation.conversation_type === 'private') {
+					const participant = await db.ConversationParticipant.findOne({
+						where: {
+							conversation_id: conversationId,
+							user_id: socket.userId,
+						},
+					})
+
+					if (!participant) {
+						socket.emit('error', {
+							message: 'Nie masz dostępu do tej konwersacji',
+							code: 'ACCESS_DENIED',
+						})
+						return
+					}
+				} else if (conversation.conversation_type === 'group') {
+					const member = await db.GroupMember.findOne({
+						where: {
+							group_id: conversation.group_id,
+							user_id: socket.userId,
+							status: 'accepted',
+						},
+					})
+
+					if (!member) {
+						socket.emit('error', {
+							message: 'Nie jesteś członkiem tej grupy',
+							code: 'NOT_MEMBER',
+						})
+						return
+					}
+				}
+
+				// Aktualizuj ustawienia konwersacji
+				const updateData = {
+					disappearing_messages_enabled: enabled,
+				}
+
+				if (enabled) {
+					updateData.disappearing_messages_enabled_at = new Date()
+					updateData.disappearing_messages_enabled_by = socket.userId
+				} else {
+					updateData.disappearing_messages_enabled_at = null
+					updateData.disappearing_messages_enabled_by = null
+				}
+
+				await conversation.update(updateData)
+
+				// Pobierz czas znikania użytkownika który włączył tryb
+				let disappearingTime = null
+				if (enabled) {
+					const enabledByUser = await db.User.findByPk(socket.userId, {
+						attributes: ['default_disappearing_time'],
+					})
+					if (enabledByUser) {
+						disappearingTime = enabledByUser.default_disappearing_time
+					}
+				}
+
+				// Pobierz wszystkich uczestników konwersacji
+				let participants = []
+				if (conversation.conversation_type === 'private') {
+					const convParticipants = await db.ConversationParticipant.findAll({
+						where: { conversation_id: conversationId },
+						attributes: ['user_id'],
+					})
+					participants = convParticipants.map(p => p.user_id)
+				} else {
+					const groupMembers = await db.GroupMember.findAll({
+						where: {
+							group_id: conversation.group_id,
+							status: 'accepted',
+						},
+						attributes: ['user_id'],
+					})
+					participants = groupMembers.map(m => m.user_id)
+				}
+
+				// Broadcast do wszystkich uczestników
+				const broadcastData = {
+					conversationId,
+					enabled,
+					enabledBy: enabled ? socket.userId : null,
+					enabledByUsername: enabled ? socket.username : null,
+					enabledAt: enabled ? conversation.disappearing_messages_enabled_at : null,
+					disappearingTime: disappearingTime, // Czas znikania użytkownika który włączył tryb
+				}
+
+				participants.forEach(userId => {
+					io.to(`user:${userId}`).emit('disappearing_messages_toggled', broadcastData)
+				})
+
+				console.log(
+					`✅ Tryb znikających wiadomości ${enabled ? 'włączony' : 'wyłączony'} dla konwersacji ${conversationId} przez ${socket.username}`
+				)
+			} catch (error) {
+				console.error('❌ Błąd przełączania trybu znikających wiadomości:', error)
+				socket.emit('error', {
+					message: 'Nie udało się przełączyć trybu znikających wiadomości',
+					code: 'SERVER_ERROR',
+				})
 			}
 		})
 

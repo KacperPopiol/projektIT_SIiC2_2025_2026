@@ -9,6 +9,17 @@ export const usersApi = {
         const response = await axiosInstance.put('/users/notification-settings', settings)
         return response.data
     },
+
+    // Domyślny czas znikania wiadomości
+    getDefaultDisappearingTime: async () => {
+        const response = await axiosInstance.get('/users/default-disappearing-time')
+        return response.data
+    },
+
+    updateDefaultDisappearingTime: async timeInSeconds => {
+        const response = await axiosInstance.put('/users/default-disappearing-time', { timeInSeconds })
+        return response.data
+    },
 }
 
 

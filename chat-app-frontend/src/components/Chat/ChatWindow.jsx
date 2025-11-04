@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { messagesApi } from '../../api/messagesApi'
+import { usersApi } from '../../api/usersApi'
 import { useSocket } from '../../hooks/useSocket'
 import { useAuth } from '../../hooks/useAuth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
+import DisappearingMessagesBanner from './DisappearingMessagesBanner'
 import { keysApi } from '../../api/keysApi'
 
 const ChatWindow = ({ conversation }) => {
@@ -12,12 +14,16 @@ const ChatWindow = ({ conversation }) => {
 	const [typingUsers, setTypingUsers] = useState([])
 	const [showMenu, setShowMenu] = useState(false)
 	const [menuLoading, setMenuLoading] = useState(false)
+	const [disappearingMessagesEnabled, setDisappearingMessagesEnabled] = useState(false)
+	const [disappearingMessagesEnabledAt, setDisappearingMessagesEnabledAt] = useState(null)
+	const [disappearingTime, setDisappearingTime] = useState(null) // Czas znikania użytkownika który włączył tryb
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
 
-	// Ładowanie wiadomości przy zmianie konwersacji
+	// Ładowanie wiadomości i ustawień konwersacji przy zmianie konwersacji
 	useEffect(() => {
 		loadMessages()
+		loadConversationSettings()
 	}, [conversation.conversationId])
 
 	// Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
@@ -82,16 +88,28 @@ const ChatWindow = ({ conversation }) => {
 			setMessages(prev =>
 				prev.map(msg => {
 					if (msg.message_id === data.messageId) {
-						return {
-							...msg,
-							readStatuses: [
-								...(msg.readStatuses || []),
-								{
-									user_id: data.readBy,
-									is_read: true,
-									read_at: data.readAt,
-								},
-							],
+						// Zaktualizuj istniejący status odczytania lub dodaj nowy
+						const existingStatusIndex = (msg.readStatuses || []).findIndex(
+							s => s.user_id === data.readBy
+						)
+						const newStatus = {
+							user_id: data.readBy,
+							is_read: true,
+							read_at: data.readAt,
+							delete_at: data.deleteAt || null,
+						}
+						if (existingStatusIndex >= 0) {
+							const updatedStatuses = [...(msg.readStatuses || [])]
+							updatedStatuses[existingStatusIndex] = newStatus
+							return {
+								...msg,
+								readStatuses: updatedStatuses,
+							}
+						} else {
+							return {
+								...msg,
+								readStatuses: [...(msg.readStatuses || []), newStatus],
+							}
 						}
 					}
 					return msg
@@ -118,12 +136,35 @@ const ChatWindow = ({ conversation }) => {
 			}
 		}
 
+		// Nasłuchiwanie na przełączenie trybu znikających wiadomości
+		const handleDisappearingMessagesToggled = data => {
+			if (data.conversationId === conversation.conversationId) {
+				setDisappearingMessagesEnabled(data.enabled)
+				setDisappearingMessagesEnabledAt(data.enabledAt || null)
+				// Użyj czasu znikania użytkownika który włączył tryb
+				if (data.enabled && data.disappearingTime) {
+					setDisappearingTime(data.disappearingTime)
+				} else {
+					setDisappearingTime(null)
+				}
+			}
+		}
+
+		// Nasłuchiwanie na zniknięcie wiadomości (z schedulera)
+		const handleMessageDisappeared = data => {
+			console.log('🗑️ Message disappeared:', data)
+			// Usuń wiadomość z lokalnego stanu (scheduler usunął z bazy)
+			setMessages(prev => prev.filter(msg => msg.message_id !== data.messageId))
+		}
+
 		// Listenery
 		socket.on('new_private_message', handleNewPrivateMessage)
 		socket.on('new_group_message', handleNewGroupMessage)
 		socket.on('message_read', handleMessageRead)
 		socket.on('user_typing', handleUserTyping)
 		socket.on('user_stop_typing', handleUserStopTyping)
+		socket.on('disappearing_messages_toggled', handleDisappearingMessagesToggled)
+		socket.on('message_disappeared', handleMessageDisappeared)
 
 		// Cleanup - usunięcie listenerów i opuszczenie pokoju
 		return () => {
@@ -133,6 +174,8 @@ const ChatWindow = ({ conversation }) => {
 			socket.off('message_read', handleMessageRead)
 			socket.off('user_typing', handleUserTyping)
 			socket.off('user_stop_typing', handleUserStopTyping)
+			socket.off('disappearing_messages_toggled', handleDisappearingMessagesToggled)
+			socket.off('message_disappeared', handleMessageDisappeared)
 
 			if (conversation.type === 'private') {
 				socket.emit('leave_conversation', { conversationId: conversation.conversationId })
@@ -178,6 +221,55 @@ const ChatWindow = ({ conversation }) => {
 			console.error('Błąd ładowania wiadomości:', error)
 		} finally {
 			setLoading(false)
+		}
+	}
+
+	// Ładowanie ustawień konwersacji
+	const loadConversationSettings = async () => {
+		try {
+			const response = await messagesApi.getConversationSettings(conversation.conversationId)
+			if (response.success && response.settings) {
+				setDisappearingMessagesEnabled(response.settings.disappearing_messages_enabled || false)
+				setDisappearingMessagesEnabledAt(response.settings.disappearing_messages_enabled_at || null)
+				// Użyj czasu znikania użytkownika który włączył tryb (jeśli tryb włączony)
+				if (response.settings.disappearing_messages_enabled && response.settings.disappearing_time) {
+					setDisappearingTime(response.settings.disappearing_time)
+				} else {
+					setDisappearingTime(null)
+				}
+			}
+		} catch (error) {
+			console.error('Błąd ładowania ustawień konwersacji:', error)
+		}
+	}
+
+	// Przełączanie trybu znikających wiadomości
+	const handleToggleDisappearingMessages = async () => {
+		const newEnabled = !disappearingMessagesEnabled
+		
+		// Optymistyczna aktualizacja UI
+		setDisappearingMessagesEnabled(newEnabled)
+		setMenuLoading(true)
+
+		try {
+			// Wywołaj API
+			await messagesApi.toggleDisappearingMessages(conversation.conversationId, newEnabled)
+			
+			// Emit socket event dla synchronizacji
+			if (socket && connected) {
+				socket.emit('toggle_disappearing_messages', {
+					conversationId: conversation.conversationId,
+					enabled: newEnabled,
+				})
+			}
+			
+			setShowMenu(false)
+		} catch (error) {
+			// Cofnij zmianę przy błędzie
+			setDisappearingMessagesEnabled(!newEnabled)
+			alert('Błąd przełączania trybu: ' + (error.response?.data?.error || error.message))
+		} finally {
+			setMenuLoading(false)
 		}
 	}
 
@@ -326,6 +418,50 @@ const ChatWindow = ({ conversation }) => {
 							</button>
 
 							<button
+								onClick={handleToggleDisappearingMessages}
+								disabled={menuLoading}
+								style={{
+									width: '100%',
+									padding: '12px 16px',
+									border: 'none',
+									backgroundColor: 'white',
+									textAlign: 'left',
+									cursor: menuLoading ? 'not-allowed' : 'pointer',
+									fontSize: '14px',
+									borderBottom: '1px solid #f0f0f0',
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'space-between',
+								}}
+								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								<span>⏱️ Znikające wiadomości</span>
+								<span
+									style={{
+										width: '40px',
+										height: '20px',
+										backgroundColor: disappearingMessagesEnabled ? '#28a745' : '#ccc',
+										borderRadius: '10px',
+										position: 'relative',
+										transition: 'background-color 0.2s',
+									}}>
+									<span
+										style={{
+											position: 'absolute',
+											width: '16px',
+											height: '16px',
+											backgroundColor: 'white',
+											borderRadius: '50%',
+											top: '2px',
+											left: disappearingMessagesEnabled ? '22px' : '2px',
+											transition: 'left 0.2s',
+											boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+										}}
+									/>
+								</span>
+							</button>
+
+							<button
 								onClick={handleArchiveConversation}
 								disabled={menuLoading}
 								style={{
@@ -378,7 +514,11 @@ const ChatWindow = ({ conversation }) => {
 				</div>
 			) : (
 				<>
-					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} />
+					{/* Baner znikających wiadomości */}
+					{disappearingMessagesEnabled && disappearingTime && (
+						<DisappearingMessagesBanner disappearingTime={disappearingTime} />
+					)}
+					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} disappearingMessagesEnabled={disappearingMessagesEnabled} disappearingMessagesEnabledAt={disappearingMessagesEnabledAt} disappearingTime={disappearingTime} />
 
 					{/* Wskaźnik pisania */}
 					{typingUsers.length > 0 && (
