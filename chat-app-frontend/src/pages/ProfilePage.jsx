@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { authApi } from '../api/authApi'
 import { storage } from '../utils/storage'
 import NotificationSettings from '../components/Settings/NotificationSettings'
+import DisappearingMessagesSettings from '../components/Settings/DisappearingMessagesSettings'
 
 const ProfilePage = () => {
 	const navigate = useNavigate()
@@ -350,6 +351,15 @@ const ProfilePage = () => {
 				}}
 			>
 				<NotificationSettings />
+			</div>
+
+			{/* Ustawienia znikających wiadomości */}
+			<div
+				style={{
+					marginTop: '20px',
+				}}
+			>
+				<DisappearingMessagesSettings />
 			</div>
 
 			{/* Strefa niebezpieczna */}

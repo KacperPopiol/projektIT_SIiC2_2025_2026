@@ -76,7 +76,7 @@ exports.getMessages = async (req, res) => {
 				{
 					model: db.MessageReadStatus,
 					as: 'readStatuses',
-					attributes: ['user_id', 'is_read', 'read_at'],
+					attributes: ['user_id', 'is_read', 'read_at', 'delete_at'],
 				},
 			],
 			attributes: ['message_id', 'conversation_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
@@ -133,6 +133,15 @@ exports.deleteMessage = async (req, res) => {
 			message_id: messageId,
 			user_id: userId,
 		})
+
+		// Emit socket event w czasie rzeczywistym (jeśli io dostępne)
+		const io = req.app.get('io')
+		if (io) {
+			io.to(`user:${userId}`).emit('message_disappeared', {
+				messageId: messageId,
+				userId: userId,
+			})
+		}
 
 		res.json({
 			success: true,
@@ -424,6 +433,169 @@ exports.exportConversation = async (req, res) => {
 		console.error('❌ Błąd eksportu konwersacji:', error)
 		res.status(500).json({
 			error: 'Błąd serwera',
+		})
+	}
+}
+
+/**
+ * Przełączanie trybu znikających wiadomości dla konwersacji
+ */
+exports.toggleDisappearingMessages = async (req, res) => {
+	try {
+		const { conversationId } = req.params
+		const { enabled } = req.body
+		const userId = req.user.userId
+
+		// Sprawdź czy konwersacja istnieje
+		const conversation = await db.Conversation.findByPk(conversationId)
+
+		if (!conversation) {
+			return res.status(404).json({
+				error: 'Konwersacja nie znaleziona',
+			})
+		}
+
+		// Sprawdź dostęp użytkownika do konwersacji
+		if (conversation.conversation_type === 'private') {
+			const participant = await db.ConversationParticipant.findOne({
+				where: {
+					conversation_id: conversationId,
+					user_id: userId,
+				},
+			})
+
+			if (!participant) {
+				return res.status(403).json({
+					error: 'Nie masz dostępu do tej konwersacji',
+				})
+			}
+		} else if (conversation.conversation_type === 'group') {
+			const member = await db.GroupMember.findOne({
+				where: {
+					group_id: conversation.group_id,
+					user_id: userId,
+					status: 'accepted',
+				},
+			})
+
+			if (!member) {
+				return res.status(403).json({
+					error: 'Nie jesteś członkiem tej grupy',
+				})
+			}
+		}
+
+		// Aktualizuj ustawienia konwersacji
+		const updateData = {
+			disappearing_messages_enabled: enabled,
+		}
+
+		if (enabled) {
+			updateData.disappearing_messages_enabled_at = new Date()
+			updateData.disappearing_messages_enabled_by = userId
+		} else {
+			updateData.disappearing_messages_enabled_at = null
+			updateData.disappearing_messages_enabled_by = null
+		}
+
+		await conversation.update(updateData)
+
+		res.json({
+			success: true,
+			message: enabled ? 'Tryb znikających wiadomości włączony' : 'Tryb znikających wiadomości wyłączony',
+			settings: {
+				disappearing_messages_enabled: conversation.disappearing_messages_enabled,
+				disappearing_messages_enabled_at: conversation.disappearing_messages_enabled_at,
+				disappearing_messages_enabled_by: conversation.disappearing_messages_enabled_by,
+			},
+		})
+	} catch (error) {
+		console.error('❌ Błąd przełączania trybu znikających wiadomości:', error)
+		res.status(500).json({
+			error: 'Błąd serwera podczas przełączania trybu',
+		})
+	}
+}
+
+/**
+ * Pobieranie ustawień konwersacji (w tym trybu znikających wiadomości)
+ */
+exports.getConversationSettings = async (req, res) => {
+	try {
+		const { conversationId } = req.params
+		const userId = req.user.userId
+
+		// Sprawdź czy konwersacja istnieje
+		const conversation = await db.Conversation.findByPk(conversationId, {
+			attributes: [
+				'conversation_id',
+				'conversation_type',
+				'disappearing_messages_enabled',
+				'disappearing_messages_enabled_at',
+				'disappearing_messages_enabled_by',
+			],
+		})
+
+		if (!conversation) {
+			return res.status(404).json({
+				error: 'Konwersacja nie znaleziona',
+			})
+		}
+
+		// Sprawdź dostęp użytkownika
+		if (conversation.conversation_type === 'private') {
+			const participant = await db.ConversationParticipant.findOne({
+				where: {
+					conversation_id: conversationId,
+					user_id: userId,
+				},
+			})
+
+			if (!participant) {
+				return res.status(403).json({
+					error: 'Nie masz dostępu do tej konwersacji',
+				})
+			}
+		} else if (conversation.conversation_type === 'group') {
+			const member = await db.GroupMember.findOne({
+				where: {
+					group_id: conversation.group_id,
+					user_id: userId,
+					status: 'accepted',
+				},
+			})
+
+			if (!member) {
+				return res.status(403).json({
+					error: 'Nie jesteś członkiem tej grupy',
+				})
+			}
+		}
+
+		// Pobierz czas znikania użytkownika który włączył tryb
+		let disappearingTime = null
+		if (conversation.disappearing_messages_enabled_by) {
+			const enabledByUser = await db.User.findByPk(conversation.disappearing_messages_enabled_by, {
+				attributes: ['default_disappearing_time'],
+			})
+			if (enabledByUser) {
+				disappearingTime = enabledByUser.default_disappearing_time
+			}
+		}
+
+		res.json({
+			success: true,
+			settings: {
+				disappearing_messages_enabled: conversation.disappearing_messages_enabled,
+				disappearing_messages_enabled_at: conversation.disappearing_messages_enabled_at,
+				disappearing_messages_enabled_by: conversation.disappearing_messages_enabled_by,
+				disappearing_time: disappearingTime, // Czas znikania użytkownika który włączył tryb
+			},
+		})
+	} catch (error) {
+		console.error('❌ Błąd pobierania ustawień konwersacji:', error)
+		res.status(500).json({
+			error: 'Błąd serwera podczas pobierania ustawień',
 		})
 	}
 }

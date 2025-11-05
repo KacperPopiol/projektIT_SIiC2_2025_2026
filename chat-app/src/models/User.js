@@ -57,6 +57,11 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.TEXT,
 				allowNull: true,
 			},
+			default_disappearing_time: {
+				type: DataTypes.INTEGER,
+				defaultValue: 60,
+				allowNull: false,
+			},
 		},
 		{
 			tableName: 'users',

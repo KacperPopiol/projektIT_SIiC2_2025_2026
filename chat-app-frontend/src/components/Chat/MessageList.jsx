@@ -10,7 +10,7 @@ import {
 import { decryptGroupMessage, getCachedGroupKey, cacheGroupKey, decryptGroupKey } from '../../utils/groupEncryption'
 import { keysApi } from '../../api/keysApi'
 
-const MessageList = ({ messages, conversation, onMessageDeleted }) => {
+const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMessagesEnabled, disappearingMessagesEnabledAt, disappearingTime }) => {
 	const { user, privateKeyDH } = useAuth()
 	const messagesEndRef = useRef(null)
 	const [hoveredMessage, setHoveredMessage] = useState(null)
@@ -19,6 +19,9 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 	const [sharedSecretAES, setSharedSecretAES] = useState(null)
 	const [loadingKeys, setLoadingKeys] = useState(true)
 	const [groupKey, setGroupKey] = useState(null)
+	const messageTimersRef = useRef({})
+	const [hiddenMessages, setHiddenMessages] = useState(new Set())
+	const [timerUpdate, setTimerUpdate] = useState(0) // Force re-render dla timera
 
 	const scrollToBottom = () => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -27,6 +30,124 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 	useEffect(() => {
 		scrollToBottom()
 	}, [messages])
+
+	// Timer dla znikających wiadomości
+	useEffect(() => {
+		if (!disappearingMessagesEnabled || !disappearingTime) {
+			// Wyczyść wszystkie timery jeśli tryb wyłączony lub brak czasu
+			Object.values(messageTimersRef.current).forEach(intervalId => clearInterval(intervalId))
+			messageTimersRef.current = {}
+			setHiddenMessages(new Set())
+			return
+		}
+
+		const timers = { ...messageTimersRef.current }
+		const newHiddenMessages = new Set()
+
+		messages.forEach(message => {
+			// Sprawdź czy wiadomość została wysłana po włączeniu trybu
+			if (disappearingMessagesEnabledAt) {
+				const messageSentAt = new Date(message.created_at)
+				const enabledAt = new Date(disappearingMessagesEnabledAt)
+				if (messageSentAt < enabledAt) {
+					return // Wiadomość wysłana przed włączeniem trybu - nie znika
+				}
+			}
+
+			// Sprawdź czy wiadomość jest przeczytana przez użytkownika
+			const myReadStatus = message.readStatuses?.find(status => status.user_id === user?.userId && status.is_read)
+
+			if (!myReadStatus || !myReadStatus.read_at) {
+				return // Wiadomość nie przeczytana - nie uruchamiaj timera
+			}
+
+			// Sprawdź czy wiadomość ma delete_at (ustawione przez backend przy przeczytaniu)
+			let deleteAt = myReadStatus.delete_at
+
+			// Jeśli nie ma delete_at, oblicz z read_at + disappearingTime (czas użytkownika który włączył tryb)
+			if (!deleteAt && disappearingTime) {
+				const readAt = new Date(myReadStatus.read_at)
+				deleteAt = new Date(readAt.getTime() + disappearingTime * 1000)
+			} else if (deleteAt) {
+				deleteAt = new Date(deleteAt)
+			} else {
+				return // Brak czasu znikania - nie uruchamiaj timera
+			}
+
+			const messageId = message.message_id
+
+			// Sprawdź czy timer już istnieje
+			if (timers[messageId]) {
+				return // Timer już działa
+			}
+
+			// Sprawdź czy wiadomość już powinna być ukryta
+			const now = new Date()
+			if (deleteAt <= now) {
+				newHiddenMessages.add(messageId)
+				setHiddenMessages(newHiddenMessages)
+				// Wywołaj API delete dla pewności
+				messagesApi.deleteMessage(messageId).catch(err => console.error('Błąd usuwania wiadomości:', err))
+				return
+			}
+
+			// Uruchom timer
+			const intervalId = setInterval(() => {
+				const now = new Date()
+				const remainingSeconds = Math.max(0, Math.floor((deleteAt - now) / 1000))
+
+				if (remainingSeconds <= 0) {
+					// Ukryj wiadomość
+					setHiddenMessages(prev => new Set([...prev, messageId]))
+					// Wywołaj API delete
+					messagesApi.deleteMessage(messageId).catch(err => console.error('Błąd usuwania wiadomości:', err))
+					// Wyczyść timer
+					clearInterval(intervalId)
+					delete messageTimersRef.current[messageId]
+				} else {
+					// Aktualizuj timer dla wyświetlania (force re-render)
+					setTimerUpdate(prev => prev + 1)
+				}
+			}, 1000) // Aktualizuj co sekundę
+
+			timers[messageId] = intervalId
+			messageTimersRef.current[messageId] = intervalId
+		})
+
+		// Wyczyść stare timery dla wiadomości których już nie ma
+		Object.keys(messageTimersRef.current).forEach(messageId => {
+			if (!messages.find(m => m.message_id === parseInt(messageId))) {
+				clearInterval(messageTimersRef.current[messageId])
+				delete messageTimersRef.current[messageId]
+				delete timers[messageId]
+			}
+		})
+
+		setHiddenMessages(prev => {
+			// Merge z poprzednimi ukrytymi wiadomościami
+			const merged = new Set(prev)
+			newHiddenMessages.forEach(id => merged.add(id))
+			return merged
+		})
+
+		// Cleanup
+		return () => {
+			Object.values(timers).forEach(intervalId => clearInterval(intervalId))
+		}
+	}, [messages, disappearingMessagesEnabled, disappearingMessagesEnabledAt, disappearingTime, user?.userId])
+
+	// Force re-render co sekundę dla aktywnych timerów
+	useEffect(() => {
+		if (!disappearingMessagesEnabled || !disappearingTime || Object.keys(messageTimersRef.current).length === 0) {
+			return
+		}
+
+		const interval = setInterval(() => {
+			setTimerUpdate(prev => prev + 1)
+		}, 1000)
+
+		return () => clearInterval(interval)
+	}, [disappearingMessagesEnabled, disappearingTime])
 
 	useEffect(() => {
 		if (conversation?.type === 'private' && privateKeyDH && conversation.conversationId) {
@@ -302,10 +423,36 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 				</div>
 			)}
 
-			{messages.map(message => {
-				const isMyMessage = message.sender_id === user?.userId
-				const isRead = message.readStatuses?.some(s => s.is_read)
-				const isDeleting = deletingMessage === message.message_id
+			{messages
+				.filter(message => !hiddenMessages.has(message.message_id))
+				.map(message => {
+					const isMyMessage = message.sender_id === user?.userId
+					const isRead = message.readStatuses?.some(s => s.is_read)
+					const isDeleting = deletingMessage === message.message_id
+
+					// Oblicz pozostały czas dla znikających wiadomości (użyj timerUpdate aby wymusić re-render)
+					const _ = timerUpdate // Użyj timerUpdate aby wymusić re-render
+					let remainingSeconds = null
+					if (disappearingMessagesEnabled && disappearingMessagesEnabledAt && disappearingTime) {
+						const messageSentAt = new Date(message.created_at)
+						const enabledAt = new Date(disappearingMessagesEnabledAt)
+						if (messageSentAt >= enabledAt) {
+							const myReadStatus = message.readStatuses?.find(
+								status => status.user_id === user?.userId && status.is_read
+							)
+							if (myReadStatus && myReadStatus.read_at) {
+								let deleteAt = myReadStatus.delete_at
+								if (!deleteAt) {
+									const readAt = new Date(myReadStatus.read_at)
+									deleteAt = new Date(readAt.getTime() + disappearingTime * 1000)
+								} else {
+									deleteAt = new Date(deleteAt)
+								}
+								const now = new Date()
+								remainingSeconds = Math.max(0, Math.floor((deleteAt - now) / 1000))
+							}
+						}
+					}
 
 				const displayContent = (() => {
 					if (message.is_encrypted) {
@@ -384,6 +531,7 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 									display: 'flex',
 									justifyContent: 'space-between',
 									alignItems: 'center',
+									flexWrap: 'wrap',
 								}}>
 								<span>
 									{new Date(message.created_at).toLocaleTimeString('pl-PL', {
@@ -391,7 +539,20 @@ const MessageList = ({ messages, conversation, onMessageDeleted }) => {
 										minute: '2-digit',
 									})}
 								</span>
-								{isMyMessage && <span style={{ marginLeft: '10px' }}>{isRead ? '✓✓' : '✓'}</span>}
+								<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+									{/* Wskaźnik odliczania dla znikających wiadomości */}
+									{remainingSeconds !== null && remainingSeconds > 0 && (
+										<span
+											style={{
+												fontSize: '10px',
+												color: remainingSeconds <= 10 ? '#dc3545' : '#ffc107',
+												fontWeight: 'bold',
+											}}>
+											⏱️ {remainingSeconds}s
+										</span>
+									)}
+									{isMyMessage && <span>{isRead ? '✓✓' : '✓'}</span>}
+								</div>
 							</div>
 
 							{/* Przycisk usuń (tylko dla własnych wiadomości, widoczny po hover) */}

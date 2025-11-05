@@ -44,4 +44,18 @@ export const messagesApi = {
 		const response = await axiosInstance.delete(`/messages/${messageId}`)
 		return response.data
 	},
+
+	// Znikające wiadomości
+	toggleDisappearingMessages: async (conversationId, enabled) => {
+		const response = await axiosInstance.put(`/messages/conversations/${conversationId}/disappearing`, {
+			enabled,
+		})
+		return response.data
+	},
+
+	// Pobieranie ustawień konwersacji
+	getConversationSettings: async conversationId => {
+		const response = await axiosInstance.get(`/messages/conversations/${conversationId}/settings`)
+		return response.data
+	},
 }

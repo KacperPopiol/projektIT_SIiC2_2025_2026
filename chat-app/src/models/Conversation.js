@@ -19,6 +19,23 @@ module.exports = (sequelize, DataTypes) => {
 					key: 'group_id',
 				},
 			},
+			disappearing_messages_enabled: {
+				type: DataTypes.BOOLEAN,
+				defaultValue: false,
+				allowNull: false,
+			},
+			disappearing_messages_enabled_at: {
+				type: DataTypes.DATE,
+				allowNull: true,
+			},
+			disappearing_messages_enabled_by: {
+				type: DataTypes.INTEGER,
+				allowNull: true,
+				references: {
+					model: 'users',
+					key: 'user_id',
+				},
+			},
 		},
 		{
 			tableName: 'conversations',
