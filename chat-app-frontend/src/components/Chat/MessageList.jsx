@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { messagesApi } from '../../api/messagesApi'
 import {
@@ -10,8 +10,17 @@ import {
 import { decryptGroupMessage, getCachedGroupKey, cacheGroupKey, decryptGroupKey } from '../../utils/groupEncryption'
 import { keysApi } from '../../api/keysApi'
 import FilePreview from './FilePreview'
+import { CHAT_THEMES } from '../../constants/chatThemes'
 
-const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMessagesEnabled, disappearingMessagesEnabledAt, disappearingTime }) => {
+const MessageList = ({
+	messages,
+	conversation,
+	onMessageDeleted,
+	disappearingMessagesEnabled,
+	disappearingMessagesEnabledAt,
+	disappearingTime,
+	activeTheme,
+}) => {
 	const { user, privateKeyDH } = useAuth()
 	const messagesEndRef = useRef(null)
 	const [hoveredMessage, setHoveredMessage] = useState(null)
@@ -23,6 +32,12 @@ const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMes
 	const messageTimersRef = useRef({})
 	const [hiddenMessages, setHiddenMessages] = useState(new Set())
 	const [timerUpdate, setTimerUpdate] = useState(0) // Force re-render dla timera
+	const themeVariables = useMemo(() => {
+		if (activeTheme?.variables) {
+			return activeTheme.variables
+		}
+		return CHAT_THEMES[0].variables
+	}, [activeTheme])
 
 	const scrollToBottom = () => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -376,7 +391,7 @@ const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMes
 				flex: 1,
 				overflowY: 'auto',
 				padding: '20px',
-				backgroundColor: '#f5f5f5',
+				backgroundColor: 'transparent',
 			}}>
 			{/* Status szyfrowania - PRIVATE */}
 			{conversation?.type === 'private' && (
@@ -430,6 +445,36 @@ const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMes
 					const isMyMessage = message.sender_id === user?.userId
 					const isRead = message.readStatuses?.some(s => s.is_read)
 					const isDeleting = deletingMessage === message.message_id
+					const messageType = message.message_type || message.messageType || 'user'
+					const isSystemMessage = messageType === 'system'
+
+					if (isSystemMessage) {
+						return (
+							<div
+								key={message.message_id}
+								style={{
+									display: 'flex',
+									justifyContent: 'center',
+									margin: '12px 0',
+								}}>
+								<div
+									style={{
+										maxWidth: '70%',
+										backgroundColor: 'rgba(255,255,255,0.6)',
+										borderRadius: '999px',
+										padding: '8px 16px',
+										fontSize: '12px',
+										color: themeVariables.systemTextColor,
+										textAlign: 'center',
+										boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+										border: `1px solid ${themeVariables.accentColor}33`,
+										backdropFilter: 'blur(4px)',
+									}}>
+									{message.content}
+								</div>
+							</div>
+						)
+					}
 
 					// Oblicz pozostały czas dla znikających wiadomości (użyj timerUpdate aby wymusić re-render)
 					const _ = timerUpdate // Użyj timerUpdate aby wymusić re-render
@@ -487,8 +532,10 @@ const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMes
 						<div
 							style={{
 								maxWidth: '60%',
-								backgroundColor: isMyMessage ? '#007bff' : '#fff',
-								color: isMyMessage ? '#fff' : '#000',
+								backgroundColor: isMyMessage
+									? themeVariables.outgoingBubbleColor
+									: themeVariables.incomingBubbleColor,
+								color: isMyMessage ? themeVariables.outgoingTextColor : themeVariables.incomingTextColor,
 								padding: '10px 15px',
 								borderRadius: '10px',
 								boxShadow: '0 1px 2px rgba(0,0,0,0.1)',

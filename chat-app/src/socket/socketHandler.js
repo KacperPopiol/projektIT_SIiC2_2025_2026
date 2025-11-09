@@ -1,6 +1,8 @@
 const db = require('../models')
 const { Op } = require('sequelize')
 const jwt = require('jsonwebtoken')
+const { applyThemeToConversation, chatThemesMap, normalizeThemeKey } = require('../utils/conversationTheme')
+const { createThemeChangeSystemMessage } = require('../utils/systemMessage')
 
 /**
  * Obsługa wszystkich zdarzeń Socket.io dla komunikacji w czasie rzeczywistym
@@ -185,6 +187,8 @@ module.exports = io => {
 					content: content ? content.trim() : '[Plik]',
 					createdAt: message.created_at,
 					isEncrypted: message.is_encrypted,
+					messageType: message.message_type,
+					systemPayload: message.system_payload,
 					files: files.map(f => ({
 						file_id: f.file_id,
 						original_name: f.original_name,
@@ -366,6 +370,8 @@ module.exports = io => {
 						content: message.content,
 						isEncrypted: encrypted,
 						createdAt: message.created_at,
+						messageType: message.message_type,
+						systemPayload: message.system_payload,
 						encryptedGroupKey: encrypted ? recipientKeys[member.user_id] : null,
 						files: files.map(f => ({
 							file_id: f.file_id,
@@ -680,6 +686,143 @@ module.exports = io => {
 				console.error('❌ Błąd przełączania trybu znikających wiadomości:', error)
 				socket.emit('error', {
 					message: 'Nie udało się przełączyć trybu znikających wiadomości',
+					code: 'SERVER_ERROR',
+				})
+			}
+		})
+
+		// ==================== ZMIANA MOTYWU KONWERSACJI ====================
+		socket.on('change_conversation_theme', async data => {
+			try {
+				const { conversationId, themeKey } = data || {}
+
+				if (!conversationId || !themeKey) {
+					socket.emit('error', {
+						message: 'Brak wymaganych danych (conversationId lub themeKey)',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				const normalizedThemeKey = normalizeThemeKey(themeKey)
+				const themeDefinition = chatThemesMap[normalizedThemeKey]
+
+				if (!themeDefinition) {
+					socket.emit('error', {
+						message: 'Wybrany motyw nie istnieje',
+						code: 'INVALID_THEME',
+					})
+					return
+				}
+
+				const conversation = await db.Conversation.findByPk(conversationId)
+
+				if (!conversation) {
+					socket.emit('error', {
+						message: 'Konwersacja nie znaleziona',
+						code: 'NOT_FOUND',
+					})
+					return
+				}
+
+				// Autoryzacja
+				let participantIds = []
+
+				if (conversation.conversation_type === 'private') {
+					const participants = await db.ConversationParticipant.findAll({
+						where: { conversation_id: conversationId },
+					})
+
+					if (!participants.find(p => p.user_id === socket.userId)) {
+						socket.emit('error', {
+							message: 'Nie masz dostępu do tej konwersacji',
+							code: 'ACCESS_DENIED',
+						})
+						return
+					}
+
+					participantIds = participants.map(p => p.user_id)
+				} else if (conversation.conversation_type === 'group') {
+					const members = await db.GroupMember.findAll({
+						where: {
+							group_id: conversation.group_id,
+							status: 'accepted',
+						},
+					})
+
+					if (!members.find(m => m.user_id === socket.userId)) {
+						socket.emit('error', {
+							message: 'Nie jesteś członkiem tej grupy',
+							code: 'NOT_MEMBER',
+						})
+						return
+					}
+
+					participantIds = members.map(m => m.user_id)
+				} else {
+					socket.emit('error', {
+						message: 'Nieobsługiwany typ konwersacji dla motywów',
+						code: 'INVALID_CONVERSATION_TYPE',
+					})
+					return
+				}
+
+				const themePayload = await applyThemeToConversation({
+					conversation,
+					themeKey: normalizedThemeKey,
+					userId: socket.userId,
+				})
+
+				const systemMessage = await createThemeChangeSystemMessage({
+					conversationId,
+					userId: socket.userId,
+					username: socket.username,
+					theme: themePayload,
+				})
+
+				const changedAt = new Date()
+				const broadcastPayload = {
+					conversationId,
+					theme: themePayload,
+					changedBy: socket.userId,
+					changedByUsername: socket.username,
+					changedAt,
+				}
+
+				const systemMessagePayload = {
+					messageId: systemMessage.message_id,
+					conversationId,
+					senderId: systemMessage.sender_id,
+					senderUsername: socket.username,
+					content: systemMessage.content,
+					createdAt: systemMessage.created_at,
+					isEncrypted: false,
+					messageType: systemMessage.message_type,
+					systemPayload: systemMessage.system_payload,
+					files: [],
+				}
+
+				participantIds.forEach(userId => {
+					io.to(`user:${userId}`).emit('conversation_theme_changed', broadcastPayload)
+
+					if (conversation.conversation_type === 'private') {
+						io.to(`user:${userId}`).emit('new_private_message', systemMessagePayload)
+					} else {
+						io.to(`user:${userId}`).emit('new_group_message', {
+							...systemMessagePayload,
+							groupId: conversation.group_id,
+						})
+					}
+				})
+
+				socket.emit('theme_change_applied', {
+					success: true,
+					theme: themePayload,
+				})
+			} catch (error) {
+				console.error('❌ Błąd zmiany motywu konwersacji (socket):', error)
+				socket.emit('error', {
+					message: 'Nie udało się zmienić motywu',
 					code: 'SERVER_ERROR',
 				})
 			}

@@ -14,8 +14,9 @@ import { keysApi } from '../../api/keysApi'
 import { groupsApi } from '../../api/groupsApi'
 import FileInput from './FileInput'
 import { filesApi } from '../../api/filesApi'
+import { CHAT_THEMES } from '../../constants/chatThemes'
 
-const MessageInput = ({ conversation, onMessageSent }) => {
+const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 	const [message, setMessage] = useState('')
 	const [sending, setSending] = useState(false)
 	const [sharedSecretAES, setSharedSecretAES] = useState(null)
@@ -27,6 +28,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 	const [selectedFiles, setSelectedFiles] = useState([])
 	const [uploadingFiles, setUploadingFiles] = useState(false)
 	const [uploadProgress, setUploadProgress] = useState({})
+	const theme = themeVariables || CHAT_THEMES[0].variables
 
 	// Inicjalizacja sekretów
 	useEffect(() => {
@@ -409,8 +411,9 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 			onSubmit={handleSubmit}
 			style={{
 				padding: '15px',
-				borderTop: '1px solid #ddd',
-				backgroundColor: '#fff',
+				borderTop: `1px solid ${theme.accentColor}33`,
+				backgroundColor: 'rgba(255,255,255,0.92)',
+				backdropFilter: 'blur(6px)',
 				display: 'flex',
 				flexDirection: 'column',
 				gap: '10px',
@@ -420,7 +423,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 				<div
 					style={{
 						fontSize: '11px',
-						color: sharedSecretAES ? '#28a745' : '#ffc107',
+						color: sharedSecretAES ? theme.accentColor : '#ffc107',
 						display: 'flex',
 						alignItems: 'center',
 						gap: '5px',
@@ -439,7 +442,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 				<div
 					style={{
 						fontSize: '11px',
-						color: groupKey ? '#28a745' : '#ffc107',
+						color: groupKey ? theme.accentColor : '#ffc107',
 						display: 'flex',
 						alignItems: 'center',
 						gap: '5px',
@@ -465,8 +468,8 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 								alignItems: 'center',
 								justifyContent: 'space-between',
 								padding: '6px 10px',
-								backgroundColor: '#f8f9fa',
-								border: '1px solid #dee2e6',
+								backgroundColor: 'rgba(255,255,255,0.85)',
+								border: `1px solid ${theme.accentColor}22`,
 								borderRadius: '4px',
 								fontSize: '12px',
 							}}>
@@ -506,7 +509,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 								style={{
 									background: 'none',
 									border: 'none',
-									color: '#dc3545',
+									color: theme.accentColor,
 									cursor: 'pointer',
 									fontSize: '16px',
 									padding: '0 5px',
@@ -543,7 +546,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 							style={{
 								width: `${uploadProgress.overall}%`,
 								height: '100%',
-								backgroundColor: '#007bff',
+								backgroundColor: theme.accentColor,
 								transition: 'width 0.3s',
 							}}
 						/>
@@ -574,7 +577,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 						flex: 1,
 						padding: '10px 15px',
 						borderRadius: '20px',
-						border: '1px solid #ddd',
+						border: `1px solid ${theme.accentColor}33`,
 						fontSize: '14px',
 						outline: 'none',
 						backgroundColor: sending || loadingKeys || uploadingFiles ? '#f5f5f5' : 'white',
@@ -589,7 +592,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 						backgroundColor:
 							(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles
 								? '#ccc'
-								: '#007bff',
+								: theme.accentColor,
 						color: 'white',
 						border: 'none',
 						borderRadius: '20px',

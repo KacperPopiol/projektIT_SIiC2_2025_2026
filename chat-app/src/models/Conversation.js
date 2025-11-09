@@ -36,6 +36,16 @@ module.exports = (sequelize, DataTypes) => {
 					key: 'user_id',
 				},
 			},
+			theme_key: {
+				type: DataTypes.STRING(64),
+				allowNull: true,
+				defaultValue: null,
+			},
+			theme_settings: {
+				type: DataTypes.JSON,
+				allowNull: true,
+				defaultValue: null,
+			},
 		},
 		{
 			tableName: 'conversations',
