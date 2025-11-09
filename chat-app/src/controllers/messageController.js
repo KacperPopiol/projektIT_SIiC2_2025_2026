@@ -1,5 +1,13 @@
 const db = require('../models')
 const { Op } = require('sequelize')
+const {
+	chatThemes,
+	chatThemesMap,
+	resolveThemeForConversation,
+	applyThemeToConversation,
+	normalizeThemeKey,
+} = require('../utils/conversationTheme')
+const { createThemeChangeSystemMessage } = require('../utils/systemMessage')
 
 /**
  * Pobieranie historii wiadomości z konwersacji
@@ -84,7 +92,16 @@ exports.getMessages = async (req, res) => {
 					attributes: ['file_id', 'original_name', 'file_type', 'file_size', 'mime_category', 'thumbnail_path'],
 				},
 			],
-			attributes: ['message_id', 'conversation_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
+			attributes: [
+				'message_id',
+				'conversation_id',
+				'sender_id',
+				'content',
+				'is_encrypted',
+				'message_type',
+				'system_payload',
+				'created_at',
+			],
 			order: [['created_at', 'DESC']],
 			limit: parseInt(limit),
 			offset: parseInt(offset),
@@ -104,6 +121,21 @@ exports.getMessages = async (req, res) => {
 }
 
 /**
+ * Lista dostępnych motywów czatu
+ */
+exports.getAvailableThemes = (req, res) => {
+	res.json({
+		success: true,
+		themes: chatThemes.map(theme => ({
+			key: theme.key,
+			name: theme.name,
+			preview: theme.preview,
+			variables: theme.variables,
+		})),
+	})
+}
+
+/**
  * Usunięcie pojedynczej wiadomości (po stronie użytkownika)
  */
 exports.deleteMessage = async (req, res) => {
@@ -116,6 +148,12 @@ exports.deleteMessage = async (req, res) => {
 		if (!message) {
 			return res.status(404).json({
 				error: 'Wiadomość nie znaleziona',
+			})
+		}
+
+		if (message.message_type === 'system') {
+			return res.status(400).json({
+				error: 'Wiadomości systemowe nie mogą być usunięte',
 			})
 		}
 
@@ -270,10 +308,12 @@ exports.deleteChat = async (req, res) => {
 		// Pobierz wszystkie wiadomości z konwersacji
 		const messages = await db.Message.findAll({
 			where: { conversation_id: conversationId },
-			attributes: ['message_id'],
+			attributes: ['message_id', 'message_type'],
 		})
 
-		if (messages.length === 0) {
+		const messagesToDelete = messages.filter(msg => msg.message_type !== 'system')
+
+		if (messagesToDelete.length === 0) {
 			return res.json({
 				success: true,
 				message: 'Brak wiadomości do usunięcia',
@@ -281,7 +321,7 @@ exports.deleteChat = async (req, res) => {
 		}
 
 		// Dodaj wszystkie wiadomości do tabeli usuniętych
-		const deletions = messages.map(msg => ({
+		const deletions = messagesToDelete.map(msg => ({
 			message_id: msg.message_id,
 			user_id: userId,
 		}))
@@ -346,7 +386,15 @@ exports.getConversations = async (req, res) => {
 							as: 'messages',
 							limit: 1,
 							order: [['created_at', 'DESC']],
-							attributes: ['message_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
+							attributes: [
+								'message_id',
+								'sender_id',
+								'content',
+								'is_encrypted',
+								'message_type',
+								'system_payload',
+								'created_at',
+							],
 							include: [
 								{
 									model: db.User,
@@ -380,6 +428,15 @@ exports.getConversations = async (req, res) => {
 									as: 'messages',
 									limit: 1,
 									order: [['created_at', 'DESC']],
+									attributes: [
+										'message_id',
+										'sender_id',
+										'content',
+										'is_encrypted',
+										'message_type',
+										'system_payload',
+										'created_at',
+									],
 									include: [
 										{
 											model: db.User,
@@ -528,6 +585,17 @@ exports.toggleDisappearingMessages = async (req, res) => {
 
 		await conversation.update(updateData)
 
+		let disappearingTime = null
+		if (conversation.disappearing_messages_enabled && conversation.disappearing_messages_enabled_by) {
+			const enabledByUser = await db.User.findByPk(conversation.disappearing_messages_enabled_by, {
+				attributes: ['default_disappearing_time'],
+			})
+
+			if (enabledByUser && typeof enabledByUser.default_disappearing_time === 'number') {
+				disappearingTime = enabledByUser.default_disappearing_time
+			}
+		}
+
 		res.json({
 			success: true,
 			message: enabled ? 'Tryb znikających wiadomości włączony' : 'Tryb znikających wiadomości wyłączony',
@@ -535,12 +603,167 @@ exports.toggleDisappearingMessages = async (req, res) => {
 				disappearing_messages_enabled: conversation.disappearing_messages_enabled,
 				disappearing_messages_enabled_at: conversation.disappearing_messages_enabled_at,
 				disappearing_messages_enabled_by: conversation.disappearing_messages_enabled_by,
+				disappearing_time: disappearingTime,
 			},
 		})
 	} catch (error) {
 		console.error('❌ Błąd przełączania trybu znikających wiadomości:', error)
 		res.status(500).json({
 			error: 'Błąd serwera podczas przełączania trybu',
+		})
+	}
+}
+
+/**
+ * Ustawienie motywu konwersacji
+ */
+exports.setConversationTheme = async (req, res) => {
+	try {
+		const { conversationId } = req.params
+		const { themeKey } = req.body
+		const userId = req.user.userId
+
+		if (!themeKey || typeof themeKey !== 'string') {
+			return res.status(400).json({
+				error: 'Brak lub nieprawidłowy identyfikator motywu',
+			})
+		}
+
+		const normalizedThemeKey = normalizeThemeKey(themeKey)
+		const themeDefinition = chatThemesMap[normalizedThemeKey]
+
+		if (!themeDefinition) {
+			return res.status(400).json({
+				error: 'Wybrany motyw nie istnieje',
+			})
+		}
+
+		const conversation = await db.Conversation.findByPk(conversationId)
+
+		if (!conversation) {
+			return res.status(404).json({
+				error: 'Konwersacja nie znaleziona',
+			})
+		}
+
+		// Sprawdź dostęp użytkownika do konwersacji
+		if (conversation.conversation_type === 'private') {
+			const participant = await db.ConversationParticipant.findOne({
+				where: {
+					conversation_id: conversationId,
+					user_id: userId,
+				},
+			})
+
+			if (!participant) {
+				return res.status(403).json({
+					error: 'Nie masz dostępu do tej konwersacji',
+				})
+			}
+		} else if (conversation.conversation_type === 'group') {
+			const member = await db.GroupMember.findOne({
+				where: {
+					group_id: conversation.group_id,
+					user_id: userId,
+					status: 'accepted',
+				},
+			})
+
+			if (!member) {
+				return res.status(403).json({
+					error: 'Nie jesteś członkiem tej grupy',
+				})
+			}
+		}
+
+		let participantIds = []
+
+		if (conversation.conversation_type === 'private') {
+			const participants = await db.ConversationParticipant.findAll({
+				where: { conversation_id: conversationId },
+				attributes: ['user_id'],
+			})
+			participantIds = participants.map(p => p.user_id)
+		} else {
+			const members = await db.GroupMember.findAll({
+				where: {
+					group_id: conversation.group_id,
+					status: 'accepted',
+				},
+				attributes: ['user_id'],
+			})
+			participantIds = members.map(m => m.user_id)
+		}
+
+		const themePayload = await applyThemeToConversation({
+			conversation,
+			themeKey: normalizedThemeKey,
+			userId,
+		})
+
+		const systemMessage = await createThemeChangeSystemMessage({
+			conversationId: conversationId,
+			userId,
+			username: req.user.username,
+			theme: themePayload,
+		})
+
+		const io = req.app.get('io')
+		const changedAt = new Date()
+		const broadcastPayload = {
+			conversationId,
+			theme: themePayload,
+			changedBy: userId,
+			changedByUsername: req.user.username,
+			changedAt,
+		}
+
+		const systemMessagePayload = {
+			messageId: systemMessage.message_id,
+			conversationId,
+			senderId: systemMessage.sender_id,
+			senderUsername: req.user.username,
+			content: systemMessage.content,
+			createdAt: systemMessage.created_at,
+			isEncrypted: false,
+			messageType: systemMessage.message_type,
+			systemPayload: systemMessage.system_payload,
+			files: [],
+		}
+
+		if (io && participantIds.length > 0) {
+			participantIds.forEach(participantId => {
+				io.to(`user:${participantId}`).emit('conversation_theme_changed', broadcastPayload)
+
+				if (conversation.conversation_type === 'private') {
+					io.to(`user:${participantId}`).emit('new_private_message', systemMessagePayload)
+				} else {
+					io.to(`user:${participantId}`).emit('new_group_message', {
+						...systemMessagePayload,
+						groupId: conversation.group_id,
+					})
+				}
+			})
+		}
+
+		res.json({
+			success: true,
+			message: 'Motyw został zaktualizowany',
+			theme: themePayload,
+			systemMessage: {
+				message_id: systemMessage.message_id,
+				content: systemMessage.content,
+				message_type: systemMessage.message_type,
+				system_payload: systemMessage.system_payload,
+				created_at: systemMessage.created_at,
+				sender_id: systemMessage.sender_id,
+			},
+		})
+	} catch (error) {
+		console.error('❌ Błąd ustawiania motywu konwersacji:', error)
+		const statusCode = error.statusCode || 500
+		res.status(statusCode).json({
+			error: statusCode === 500 ? 'Błąd serwera podczas ustawiania motywu' : error.message,
 		})
 	}
 }
@@ -561,6 +784,8 @@ exports.getConversationSettings = async (req, res) => {
 				'disappearing_messages_enabled',
 				'disappearing_messages_enabled_at',
 				'disappearing_messages_enabled_by',
+				'theme_key',
+				'theme_settings',
 			],
 		})
 
@@ -611,6 +836,8 @@ exports.getConversationSettings = async (req, res) => {
 			}
 		}
 
+		const resolvedTheme = resolveThemeForConversation(conversation)
+
 		res.json({
 			success: true,
 			settings: {
@@ -618,6 +845,7 @@ exports.getConversationSettings = async (req, res) => {
 				disappearing_messages_enabled_at: conversation.disappearing_messages_enabled_at,
 				disappearing_messages_enabled_by: conversation.disappearing_messages_enabled_by,
 				disappearing_time: disappearingTime, // Czas znikania użytkownika który włączył tryb
+				theme: resolvedTheme,
 			},
 		})
 	} catch (error) {

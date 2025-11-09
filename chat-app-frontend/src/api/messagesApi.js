@@ -58,4 +58,18 @@ export const messagesApi = {
 		const response = await axiosInstance.get(`/messages/conversations/${conversationId}/settings`)
 		return response.data
 	},
+
+	// Lista dostępnych motywów
+	getAvailableThemes: async () => {
+		const response = await axiosInstance.get('/messages/themes')
+		return response.data
+	},
+
+	// Zmiana motywu konwersacji
+	setConversationTheme: async (conversationId, themeKey) => {
+		const response = await axiosInstance.put(`/messages/conversations/${conversationId}/theme`, {
+			themeKey,
+		})
+		return response.data
+	},
 }

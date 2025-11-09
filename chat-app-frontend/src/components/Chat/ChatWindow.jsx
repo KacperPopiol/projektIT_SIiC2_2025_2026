@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { messagesApi } from '../../api/messagesApi'
 import { usersApi } from '../../api/usersApi'
 import { useSocket } from '../../hooks/useSocket'
@@ -6,7 +6,8 @@ import { useAuth } from '../../hooks/useAuth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import DisappearingMessagesBanner from './DisappearingMessagesBanner'
-import { keysApi } from '../../api/keysApi'
+import ThemePickerModal from './ThemePickerModal'
+import { CHAT_THEMES } from '../../constants/chatThemes'
 
 const ChatWindow = ({ conversation }) => {
 	const [messages, setMessages] = useState([])
@@ -17,14 +18,93 @@ const ChatWindow = ({ conversation }) => {
 	const [disappearingMessagesEnabled, setDisappearingMessagesEnabled] = useState(false)
 	const [disappearingMessagesEnabledAt, setDisappearingMessagesEnabledAt] = useState(null)
 	const [disappearingTime, setDisappearingTime] = useState(null) // Czas znikania użytkownika który włączył tryb
+	const [availableThemes, setAvailableThemes] = useState(CHAT_THEMES)
+	const [activeTheme, setActiveTheme] = useState(CHAT_THEMES[0])
+	const [themeModalOpen, setThemeModalOpen] = useState(false)
+	const [themeLoading, setThemeLoading] = useState(false)
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
+
+	const normalizeThemePayload = theme => {
+		if (!theme) return null
+		return {
+			key: theme.key || theme.themeKey || theme.id || 'default',
+			name: theme.name || theme.themeName || theme.label || 'Motyw',
+			variables: theme.variables || theme.themeVariables || CHAT_THEMES[0].variables,
+		}
+	}
+
+	const isSameConversation = id => {
+		if (id === undefined || id === null) return false
+		return String(id) === String(conversation.conversationId)
+	}
+
+	const themeVariables = useMemo(() => {
+		if (activeTheme?.variables) {
+			return activeTheme.variables
+		}
+		return CHAT_THEMES[0].variables
+	}, [activeTheme])
+
+	const addMessageToList = newMessage => {
+		if (!newMessage || !newMessage.message_id) {
+			return
+		}
+
+		const normalizedMessage = {
+			...newMessage,
+			message_type: newMessage.message_type || newMessage.messageType || 'user',
+			system_payload: newMessage.system_payload || newMessage.systemPayload || null,
+		}
+
+		let themeFromPayload = null
+		if (
+			normalizedMessage.message_type === 'system' &&
+			normalizedMessage.system_payload &&
+			normalizedMessage.system_payload.type === 'theme_change'
+		) {
+			const payload = normalizedMessage.system_payload
+			themeFromPayload = normalizeThemePayload({
+				key: payload.themeKey,
+				name: payload.themeName,
+				variables: payload.variables,
+			})
+		}
+
+		setMessages(prev => {
+			const exists = prev.some(msg => msg.message_id === normalizedMessage.message_id)
+			if (exists) {
+				return prev
+			}
+			return [...prev, normalizedMessage]
+		})
+
+		if (themeFromPayload) {
+			setActiveTheme(themeFromPayload)
+		}
+	}
 
 	// Ładowanie wiadomości i ustawień konwersacji przy zmianie konwersacji
 	useEffect(() => {
 		loadMessages()
 		loadConversationSettings()
 	}, [conversation.conversationId])
+
+	// Ładowanie listy motywów (raz na start)
+	useEffect(() => {
+		const fetchThemes = async () => {
+			try {
+				const response = await messagesApi.getAvailableThemes()
+				if (response?.success && Array.isArray(response.themes) && response.themes.length > 0) {
+					setAvailableThemes(response.themes)
+				}
+			} catch (error) {
+				console.error('Błąd ładowania motywów czatu:', error)
+			}
+		}
+
+		fetchThemes()
+	}, [])
 
 	// Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
 	useEffect(() => {
@@ -41,46 +121,44 @@ const ChatWindow = ({ conversation }) => {
 
 		// Nasłuchiwanie na nowe wiadomości prywatne
 		const handleNewPrivateMessage = data => {
-			if (data.conversationId === conversation.conversationId) {
-				setMessages(prev => [
-					...prev,
-					{
-						message_id: data.messageId,
-						conversation_id: data.conversationId,
-						sender_id: data.senderId,
-						content: data.content,
-						is_encrypted: data.isEncrypted,
-						created_at: data.createdAt,
-						sender: {
-							username: data.senderUsername,
-						},
-						readStatuses: [],
-						files: data.files || [], // Dodaj pliki z socket event
+			if (isSameConversation(data.conversationId)) {
+				addMessageToList({
+					message_id: data.messageId,
+					conversation_id: Number(data.conversationId),
+					sender_id: data.senderId,
+					content: data.content,
+					is_encrypted: data.isEncrypted,
+					message_type: data.messageType || 'user',
+					system_payload: data.systemPayload || null,
+					created_at: data.createdAt,
+					sender: {
+						username: data.senderUsername,
 					},
-				])
+					readStatuses: [],
+					files: data.files || [], // Dodaj pliki z socket event
+				})
 			}
 		}
 
 		// Nasłuchiwanie na nowe wiadomości grupowe
 		const handleNewGroupMessage = data => {
 			console.log('📨 New group message received:', data)
-			if (data.conversationId === conversation.conversationId) {
-				setMessages(prev => [
-					...prev,
-					{
-						message_id: data.messageId,
-						conversation_id: data.conversationId,
-						sender_id: data.senderId,
-						content: data.content,
-						is_encrypted: data.isEncrypted,
-						created_at: data.createdAt,
-						sender: {
-							username: data.senderUsername,
-						},
-						readStatuses: [],
-						files: data.files || [], // Dodaj pliki z socket event
+			if (isSameConversation(data.conversationId)) {
+				addMessageToList({
+					message_id: data.messageId,
+					conversation_id: Number(data.conversationId),
+					sender_id: data.senderId,
+					content: data.content,
+					is_encrypted: data.isEncrypted,
+					message_type: data.messageType || 'user',
+					system_payload: data.systemPayload || null,
+					created_at: data.createdAt,
+					sender: {
+						username: data.senderUsername,
 					},
-				])
+					readStatuses: [],
+					files: data.files || [], // Dodaj pliki z socket event
+				})
 			}
 		}
 
@@ -140,7 +218,7 @@ const ChatWindow = ({ conversation }) => {
 
 		// Nasłuchiwanie na przełączenie trybu znikających wiadomości
 		const handleDisappearingMessagesToggled = data => {
-			if (data.conversationId === conversation.conversationId) {
+			if (isSameConversation(data.conversationId)) {
 				setDisappearingMessagesEnabled(data.enabled)
 				setDisappearingMessagesEnabledAt(data.enabledAt || null)
 				// Użyj czasu znikania użytkownika który włączył tryb
@@ -159,6 +237,15 @@ const ChatWindow = ({ conversation }) => {
 			setMessages(prev => prev.filter(msg => msg.message_id !== data.messageId))
 		}
 
+		const handleConversationThemeChanged = data => {
+			if (isSameConversation(data.conversationId) && data.theme) {
+				const normalizedTheme = normalizeThemePayload(data.theme)
+				if (normalizedTheme) {
+					setActiveTheme(normalizedTheme)
+				}
+			}
+		}
+
 		// Listenery
 		socket.on('new_private_message', handleNewPrivateMessage)
 		socket.on('new_group_message', handleNewGroupMessage)
@@ -167,6 +254,7 @@ const ChatWindow = ({ conversation }) => {
 		socket.on('user_stop_typing', handleUserStopTyping)
 		socket.on('disappearing_messages_toggled', handleDisappearingMessagesToggled)
 		socket.on('message_disappeared', handleMessageDisappeared)
+		socket.on('conversation_theme_changed', handleConversationThemeChanged)
 
 		// Cleanup - usunięcie listenerów i opuszczenie pokoju
 		return () => {
@@ -178,6 +266,7 @@ const ChatWindow = ({ conversation }) => {
 			socket.off('user_stop_typing', handleUserStopTyping)
 			socket.off('disappearing_messages_toggled', handleDisappearingMessagesToggled)
 			socket.off('message_disappeared', handleMessageDisappeared)
+			socket.off('conversation_theme_changed', handleConversationThemeChanged)
 
 			if (conversation.type === 'private') {
 				socket.emit('leave_conversation', { conversationId: conversation.conversationId })
@@ -239,6 +328,15 @@ const ChatWindow = ({ conversation }) => {
 				} else {
 					setDisappearingTime(null)
 				}
+
+				if (response.settings.theme) {
+					const normalizedTheme = normalizeThemePayload(response.settings.theme)
+					if (normalizedTheme) {
+						setActiveTheme(normalizedTheme)
+					}
+				} else {
+					setActiveTheme(CHAT_THEMES[0])
+				}
 			}
 		} catch (error) {
 			console.error('Błąd ładowania ustawień konwersacji:', error)
@@ -255,7 +353,21 @@ const ChatWindow = ({ conversation }) => {
 
 		try {
 			// Wywołaj API
-			await messagesApi.toggleDisappearingMessages(conversation.conversationId, newEnabled)
+			const apiResponse = await messagesApi.toggleDisappearingMessages(conversation.conversationId, newEnabled)
+
+			if (apiResponse?.settings) {
+				const settings = apiResponse.settings
+				setDisappearingMessagesEnabled(settings.disappearing_messages_enabled ?? newEnabled)
+				setDisappearingMessagesEnabledAt(settings.disappearing_messages_enabled_at || null)
+
+				if (typeof settings.disappearing_time !== 'undefined') {
+					setDisappearingTime(settings.disappearing_time || null)
+				} else if (!settings.disappearing_messages_enabled) {
+					setDisappearingTime(null)
+				}
+			} else {
+				await loadConversationSettings()
+			}
 			
 			// Emit socket event dla synchronizacji
 			if (socket && connected) {
@@ -275,9 +387,62 @@ const ChatWindow = ({ conversation }) => {
 		}
 	}
 
+	const handleOpenThemeModal = () => {
+		setShowMenu(false)
+		setThemeModalOpen(true)
+	}
+
+	const handleCloseThemeModal = () => {
+		if (!themeLoading) {
+			setThemeModalOpen(false)
+		}
+	}
+
+	const handleThemeSelect = async theme => {
+		if (!theme || theme.key === activeTheme?.key) {
+			setThemeModalOpen(false)
+			return
+		}
+
+		setThemeLoading(true)
+		try {
+			const response = await messagesApi.setConversationTheme(conversation.conversationId, theme.key)
+
+			if (response?.theme) {
+				setActiveTheme(response.theme)
+			}
+
+			if (response?.systemMessage) {
+				const systemMessage = response.systemMessage
+				addMessageToList({
+					message_id: systemMessage.message_id,
+					conversation_id: conversation.conversationId,
+					sender_id: systemMessage.sender_id,
+					content: systemMessage.content,
+					is_encrypted: false,
+					message_type: systemMessage.message_type || 'system',
+					system_payload: systemMessage.system_payload || null,
+					created_at: systemMessage.created_at,
+					sender: {
+						username: user?.username || 'Ty',
+					},
+					readStatuses: [],
+					files: [],
+				})
+			}
+
+			setThemeModalOpen(false)
+		} catch (error) {
+			console.error('Błąd ustawiania motywu:', error)
+			alert('Nie udało się ustawić motywu: ' + (error.response?.data?.error || error.message))
+		} finally {
+			setThemeLoading(false)
+		}
+	}
+
 	// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
 	const handleNewMessage = message => {
-		setMessages(prev => [...prev, message])
+		addMessageToList(message)
 	}
 
 	// Usunięcie wiadomości z lokalnego stanu
@@ -348,13 +513,27 @@ const ChatWindow = ({ conversation }) => {
 	}
 
 	return (
-		<div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+		<div
+			style={{
+				display: 'flex',
+				flexDirection: 'column',
+				height: '100%',
+				backgroundColor: themeVariables.backgroundColor,
+				backgroundImage: themeVariables.backgroundImage || 'none',
+				backgroundSize: 'cover',
+				backgroundPosition: 'center',
+				transition: 'background 0.3s ease',
+			}}>
 			{/* Header */}
 			<div
 				style={{
 					padding: '15px',
-					borderBottom: '1px solid #ddd',
-					backgroundColor: '#fff',
+					borderBottom: `1px solid ${themeVariables.accentColor}33`,
+					backgroundColor: 'rgba(255,255,255,0.9)',
+					backdropFilter: 'blur(6px)',
+					position: 'sticky',
+					top: 0,
+					zIndex: 100,
 					display: 'flex',
 					justifyContent: 'space-between',
 					alignItems: 'center',
@@ -365,7 +544,11 @@ const ChatWindow = ({ conversation }) => {
 					</h3>
 					<p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
 						{conversation.type === 'group' ? 'Grupa' : 'Rozmowa prywatna'}
-						{connected ? ' • 🟢 Online' : ' • 🔴 Offline'}
+						{connected ? (
+							<span style={{ color: themeVariables.accentColor, marginLeft: '6px' }}>• 🟢 Online</span>
+						) : (
+							<span style={{ color: '#dc3545', marginLeft: '6px' }}>• 🔴 Offline</span>
+						)}
 					</p>
 				</div>
 
@@ -376,11 +559,12 @@ const ChatWindow = ({ conversation }) => {
 						disabled={menuLoading}
 						style={{
 							padding: '8px 12px',
-							backgroundColor: '#f8f9fa',
-							border: '1px solid #ddd',
+							backgroundColor: 'rgba(255,255,255,0.85)',
+							border: `1px solid ${themeVariables.accentColor}33`,
 							borderRadius: '5px',
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
 							fontSize: '18px',
+							color: themeVariables.accentColor,
 						}}
 						title="Opcje">
 						⋮
@@ -393,14 +577,32 @@ const ChatWindow = ({ conversation }) => {
 								top: '100%',
 								right: 0,
 								marginTop: '5px',
-								backgroundColor: 'white',
-								border: '1px solid #ddd',
+								backgroundColor: 'rgba(255,255,255,0.95)',
+								border: `1px solid ${themeVariables.accentColor}22`,
 								borderRadius: '8px',
 								boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-								zIndex: 1000,
+								zIndex: 2000,
 								minWidth: '200px',
 								overflow: 'hidden',
 							}}>
+							<button
+								onClick={handleOpenThemeModal}
+								disabled={menuLoading || themeLoading}
+								style={{
+									width: '100%',
+									padding: '12px 16px',
+									border: 'none',
+									backgroundColor: 'white',
+									textAlign: 'left',
+									cursor: menuLoading || themeLoading ? 'not-allowed' : 'pointer',
+									fontSize: '14px',
+									borderBottom: '1px solid #f0f0f0',
+								}}
+								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
+								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								🎨 Zmień motyw
+							</button>
+
 							<button
 								onClick={handleExportConversation}
 								disabled={menuLoading}
@@ -520,7 +722,15 @@ const ChatWindow = ({ conversation }) => {
 					{disappearingMessagesEnabled && disappearingTime && (
 						<DisappearingMessagesBanner disappearingTime={disappearingTime} />
 					)}
-					<MessageList messages={messages} conversation={conversation} onMessageDeleted={handleMessageDeleted} disappearingMessagesEnabled={disappearingMessagesEnabled} disappearingMessagesEnabledAt={disappearingMessagesEnabledAt} disappearingTime={disappearingTime} />
+					<MessageList
+						messages={messages}
+						conversation={conversation}
+						onMessageDeleted={handleMessageDeleted}
+						disappearingMessagesEnabled={disappearingMessagesEnabled}
+						disappearingMessagesEnabledAt={disappearingMessagesEnabledAt}
+						disappearingTime={disappearingTime}
+						activeTheme={activeTheme}
+					/>
 
 					{/* Wskaźnik pisania */}
 					{typingUsers.length > 0 && (
@@ -539,7 +749,16 @@ const ChatWindow = ({ conversation }) => {
 			)}
 
 			{/* Input */}
-			<MessageInput conversation={conversation} onMessageSent={handleNewMessage} />
+			<MessageInput conversation={conversation} onMessageSent={handleNewMessage} themeVariables={themeVariables} />
+
+			<ThemePickerModal
+				isOpen={themeModalOpen}
+				onClose={handleCloseThemeModal}
+				themes={availableThemes}
+				selectedThemeKey={activeTheme?.key}
+				onSelect={handleThemeSelect}
+				isSaving={themeLoading}
+			/>
 		</div>
 	)
 }

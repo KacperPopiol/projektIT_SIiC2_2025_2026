@@ -40,6 +40,16 @@ module.exports = (sequelize, DataTypes) => {
 				defaultValue: false,
 				allowNull: false,
 			},
+			message_type: {
+				type: DataTypes.ENUM('user', 'system'),
+				allowNull: false,
+				defaultValue: 'user',
+			},
+			system_payload: {
+				type: DataTypes.JSON,
+				allowNull: true,
+				defaultValue: null,
+			},
 		},
 		{
 			tableName: 'messages',

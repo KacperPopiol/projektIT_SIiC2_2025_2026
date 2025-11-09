@@ -9,6 +9,9 @@ router.use(authenticateToken)
 // Pobieranie listy wszystkich konwersacji
 router.get('/conversations', messageController.getConversations)
 
+// Dostępne motywy
+router.get('/themes', messageController.getAvailableThemes)
+
 // Pobieranie wiadomości z konwersacji
 router.get('/conversations/:conversationId', messageController.getMessages)
 
@@ -28,5 +31,6 @@ router.delete('/:messageId', messageController.deleteMessage)
 // Znikające wiadomości
 router.put('/conversations/:conversationId/disappearing', messageController.toggleDisappearingMessages)
 router.get('/conversations/:conversationId/settings', messageController.getConversationSettings)
+router.put('/conversations/:conversationId/theme', messageController.setConversationTheme)
 
 module.exports = router
