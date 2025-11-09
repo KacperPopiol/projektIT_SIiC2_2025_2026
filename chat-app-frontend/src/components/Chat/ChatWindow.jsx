@@ -55,6 +55,7 @@ const ChatWindow = ({ conversation }) => {
 							username: data.senderUsername,
 						},
 						readStatuses: [],
+						files: data.files || [], // Dodaj pliki z socket event
 					},
 				])
 			}
@@ -77,6 +78,7 @@ const ChatWindow = ({ conversation }) => {
 							username: data.senderUsername,
 						},
 						readStatuses: [],
+						files: data.files || [], // Dodaj pliki z socket event
 					},
 				])
 			}

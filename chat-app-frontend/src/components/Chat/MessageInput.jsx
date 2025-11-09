@@ -12,6 +12,8 @@ import {
 import { encryptGroupMessage, cacheGroupKey, getCachedGroupKey } from '../../utils/groupEncryption'
 import { keysApi } from '../../api/keysApi'
 import { groupsApi } from '../../api/groupsApi'
+import FileInput from './FileInput'
+import { filesApi } from '../../api/filesApi'
 
 const MessageInput = ({ conversation, onMessageSent }) => {
 	const [message, setMessage] = useState('')
@@ -22,6 +24,9 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 	const { user, privateKeyDH } = useAuth()
 	const [groupKey, setGroupKey] = useState(null)
 	const typingTimeoutRef = useRef(null)
+	const [selectedFiles, setSelectedFiles] = useState([])
+	const [uploadingFiles, setUploadingFiles] = useState(false)
+	const [uploadProgress, setUploadProgress] = useState({})
 
 	// Inicjalizacja sekretów
 	useEffect(() => {
@@ -227,7 +232,8 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 	const handleSubmit = async e => {
 		e.preventDefault()
 
-		if (!message.trim() || !connected || sending) return
+		// Sprawdź czy jest przynajmniej wiadomość lub pliki
+		if ((!message.trim() && selectedFiles.length === 0) || !connected || sending || uploadingFiles) return
 
 		setSending(true)
 		const originalMessage = message.trim()
@@ -243,10 +249,32 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 				clearTimeout(typingTimeoutRef.current)
 			}
 
-			let contentToSend = originalMessage
+			// Upload plików jeśli są
+			let fileIds = []
+			if (selectedFiles.length > 0) {
+				setUploadingFiles(true)
+				try {
+					const uploadResponse = await filesApi.uploadFiles(conversation.conversationId, selectedFiles, progress => {
+						setUploadProgress({ overall: progress })
+					})
+					fileIds = uploadResponse.files.map(f => f.file_id)
+					setSelectedFiles([]) // Wyczyść wybrane pliki po uploadzie
+					setUploadProgress({})
+				} catch (uploadError) {
+					console.error('Błąd uploadu plików:', uploadError)
+					alert('Nie udało się przesłać plików: ' + (uploadError.response?.data?.error || uploadError.message))
+					setSending(false)
+					setUploadingFiles(false)
+					return
+				} finally {
+					setUploadingFiles(false)
+				}
+			}
+
+			let contentToSend = originalMessage || '[Plik]' // Jeśli tylko pliki, użyj placeholder
 			let isEncrypted = false
 
-			if (conversation.type === 'private' && sharedSecretAES) {
+			if (conversation.type === 'private' && sharedSecretAES && originalMessage.trim()) {
 				try {
 					const encrypted = await encryptMessageWithSharedSecret(originalMessage, sharedSecretAES)
 
@@ -323,6 +351,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 							encryptedContent: JSON.stringify(encrypted),
 							recipientKeys: recipientKeys,
 							isEncrypted: true,
+							fileIds: fileIds,
 						})
 
 						console.log('Wiadomość grupowa zaszyfrowana i wysłana')
@@ -338,8 +367,9 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 					socket.emit('send_group_message', {
 						conversationId: conversation.conversationId,
 						groupId: conversation.groupId,
-						content: originalMessage,
+						content: originalMessage || '[Plik]',
 						isEncrypted: false,
+						fileIds: fileIds,
 					})
 				}
 			}
@@ -350,6 +380,7 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 					conversationId: conversation.conversationId,
 					content: contentToSend,
 					isEncrypted: isEncrypted,
+					fileIds: fileIds,
 				})
 			}
 
@@ -423,13 +454,122 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 				</div>
 			)}
 
-			<div style={{ display: 'flex', gap: '10px' }}>
+			{/* Lista wybranych plików */}
+			{selectedFiles.length > 0 && (
+				<div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
+					{selectedFiles.map((file, index) => (
+						<div
+							key={index}
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'space-between',
+								padding: '6px 10px',
+								backgroundColor: '#f8f9fa',
+								border: '1px solid #dee2e6',
+								borderRadius: '4px',
+								fontSize: '12px',
+							}}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+								<span style={{ fontSize: '14px' }}>
+									{file.type.startsWith('image/')
+										? '🖼️'
+										: file.type === 'application/pdf'
+											? '📄'
+											: file.type.startsWith('video/')
+												? '🎥'
+												: file.type.startsWith('audio/')
+													? '🎵'
+													: '📎'}
+								</span>
+								<span
+									style={{
+										overflow: 'hidden',
+										textOverflow: 'ellipsis',
+										whiteSpace: 'nowrap',
+										flex: 1,
+									}}>
+									{file.name}
+								</span>
+								<span style={{ color: '#666', fontSize: '11px', whiteSpace: 'nowrap' }}>
+									({filesApi.formatFileSize(file.size)})
+								</span>
+							</div>
+							<button
+								type="button"
+								onClick={e => {
+									e.stopPropagation()
+									const newFiles = [...selectedFiles]
+									newFiles.splice(index, 1)
+									setSelectedFiles(newFiles)
+								}}
+								style={{
+									background: 'none',
+									border: 'none',
+									color: '#dc3545',
+									cursor: 'pointer',
+									fontSize: '16px',
+									padding: '0 5px',
+									marginLeft: '8px',
+								}}
+								title="Usuń plik">
+								×
+							</button>
+						</div>
+					))}
+					{selectedFiles.length > 0 && (
+						<div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+							{selectedFiles.length}/5 plików
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Progress bar dla uploadu */}
+			{uploadingFiles && uploadProgress.overall !== undefined && (
+				<div style={{ marginBottom: '10px' }}>
+					<div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+						Przesyłanie plików: {uploadProgress.overall}%
+					</div>
+					<div
+						style={{
+							width: '100%',
+							height: '8px',
+							backgroundColor: '#e0e0e0',
+							borderRadius: '4px',
+							overflow: 'hidden',
+						}}>
+						<div
+							style={{
+								width: `${uploadProgress.overall}%`,
+								height: '100%',
+								backgroundColor: '#007bff',
+								transition: 'width 0.3s',
+							}}
+						/>
+					</div>
+				</div>
+			)}
+
+			<div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+				{/* FileInput - mały przycisk */}
+				{!sending && !uploadingFiles && (
+					<FileInput
+						onFilesSelected={setSelectedFiles}
+						selectedFiles={selectedFiles}
+						onRemoveFile={index => {
+							const newFiles = [...selectedFiles]
+							newFiles.splice(index, 1)
+							setSelectedFiles(newFiles)
+						}}
+					/>
+				)}
 				<input
 					type="text"
 					value={message}
 					onChange={handleChange}
 					placeholder={connected ? 'Wpisz wiadomość...' : 'Łączenie...'}
-					disabled={!connected || sending || loadingKeys}
+					disabled={!connected || sending || loadingKeys || uploadingFiles}
 					style={{
 						flex: 1,
 						padding: '10px 15px',
@@ -437,25 +577,37 @@ const MessageInput = ({ conversation, onMessageSent }) => {
 						border: '1px solid #ddd',
 						fontSize: '14px',
 						outline: 'none',
-						backgroundColor: sending || loadingKeys ? '#f5f5f5' : 'white',
-						cursor: sending || loadingKeys ? 'not-allowed' : 'text',
+						backgroundColor: sending || loadingKeys || uploadingFiles ? '#f5f5f5' : 'white',
+						cursor: sending || loadingKeys || uploadingFiles ? 'not-allowed' : 'text',
 					}}
 				/>
 				<button
 					type="submit"
-					disabled={!message.trim() || !connected || sending || loadingKeys}
+					disabled={(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles}
 					style={{
 						padding: '10px 25px',
-						backgroundColor: !message.trim() || !connected || sending || loadingKeys ? '#ccc' : '#007bff',
+						backgroundColor:
+							(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles
+								? '#ccc'
+								: '#007bff',
 						color: 'white',
 						border: 'none',
 						borderRadius: '20px',
-						cursor: !message.trim() || !connected || sending || loadingKeys ? 'not-allowed' : 'pointer',
+						cursor:
+							(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles
+								? 'not-allowed'
+								: 'pointer',
 						fontSize: '14px',
 						fontWeight: 'bold',
 						transition: 'background-color 0.2s',
 					}}>
-					{loadingKeys ? '🔑 Klucze...' : sending ? '⏳ Wysyłanie...' : '📤 Wyślij'}
+					{loadingKeys
+						? '🔑 Klucze...'
+						: uploadingFiles
+							? `⏳ ${uploadProgress.overall || 0}%`
+							: sending
+								? '⏳ Wysyłanie...'
+								: '📤 Wyślij'}
 				</button>
 			</div>
 		</form>

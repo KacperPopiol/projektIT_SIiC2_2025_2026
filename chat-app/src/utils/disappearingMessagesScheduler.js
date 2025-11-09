@@ -47,6 +47,30 @@ const runScheduler = async () => {
 						user_id: readStatus.user_id,
 					})
 
+					// Usuń powiązane pliki z dysku (jeśli są)
+					const files = await db.File.findAll({
+						where: { message_id: readStatus.message_id },
+					})
+
+					const fs = require('fs')
+					for (const file of files) {
+						try {
+							// Usuń plik z dysku
+							if (fs.existsSync(file.file_path)) {
+								fs.unlinkSync(file.file_path)
+							}
+							// Usuń miniaturę jeśli istnieje
+							if (file.thumbnail_path && fs.existsSync(file.thumbnail_path)) {
+								fs.unlinkSync(file.thumbnail_path)
+							}
+							// Usuń z bazy
+							await file.destroy()
+							console.log(`🗑️ Scheduler: Usunięto plik ${file.file_id} dla wiadomości ${readStatus.message_id}`)
+						} catch (fileError) {
+							console.error(`❌ Błąd usuwania pliku ${file.file_id}:`, fileError)
+						}
+					}
+
 					// Emit socket event do użytkownika w czasie rzeczywistym
 					if (ioInstance) {
 						ioInstance.to(`user:${readStatus.user_id}`).emit('message_disappeared', {

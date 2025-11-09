@@ -78,6 +78,11 @@ exports.getMessages = async (req, res) => {
 					as: 'readStatuses',
 					attributes: ['user_id', 'is_read', 'read_at', 'delete_at'],
 				},
+				{
+					model: db.File,
+					as: 'files',
+					attributes: ['file_id', 'original_name', 'file_type', 'file_size', 'mime_category', 'thumbnail_path'],
+				},
 			],
 			attributes: ['message_id', 'conversation_id', 'sender_id', 'content', 'is_encrypted', 'created_at'],
 			order: [['created_at', 'DESC']],
@@ -133,6 +138,29 @@ exports.deleteMessage = async (req, res) => {
 			message_id: messageId,
 			user_id: userId,
 		})
+
+		// Usuń powiązane pliki z dysku (jeśli są)
+		const files = await db.File.findAll({
+			where: { message_id: messageId },
+		})
+
+		const fs = require('fs')
+		for (const file of files) {
+			try {
+				// Usuń plik z dysku
+				if (fs.existsSync(file.file_path)) {
+					fs.unlinkSync(file.file_path)
+				}
+				// Usuń miniaturę jeśli istnieje
+				if (file.thumbnail_path && fs.existsSync(file.thumbnail_path)) {
+					fs.unlinkSync(file.thumbnail_path)
+				}
+				// Usuń z bazy
+				await file.destroy()
+			} catch (error) {
+				console.error(`❌ Błąd usuwania pliku ${file.file_id}:`, error)
+			}
+		}
 
 		// Emit socket event w czasie rzeczywistym (jeśli io dostępne)
 		const io = req.app.get('io')

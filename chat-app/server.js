@@ -15,6 +15,7 @@ const contactRoutes = require('./src/routes/contacts')
 const groupRoutes = require('./src/routes/groups')
 const messageRoutes = require('./src/routes/messages')
 const keysRoutes = require('./src/routes/keysRoutes')
+const fileRoutes = require('./src/routes/files')
 
 // Inicjalizacja Express
 const app = express()
@@ -59,6 +60,7 @@ app.use('/api/contacts', contactRoutes)
 app.use('/api/groups', groupRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/keys', keysRoutes)
+app.use('/api/files', fileRoutes)
 
 // ==================== HEALTH CHECK ====================
 

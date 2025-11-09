@@ -14,6 +14,7 @@ const Message = require('./Message')(sequelize, DataTypes)
 const MessageReadStatus = require('./MessageReadStatus')(sequelize, DataTypes)
 const DeletedMessage = require('./DeletedMessage')(sequelize, DataTypes)
 const GroupEncryptedKey = require('./GroupEncryptedKey')(sequelize, DataTypes)
+const File = require('./File')(sequelize, DataTypes)
 
 // Define all associations/relationships
 const defineAssociations = () => {
@@ -228,6 +229,12 @@ const defineAssociations = () => {
 		onDelete: 'CASCADE',
 	})
 
+	Message.hasMany(File, {
+		foreignKey: 'message_id',
+		as: 'files',
+		onDelete: 'CASCADE',
+	})
+
 	// ==================== MESSAGE READ STATUS RELATIONSHIPS ====================
 
 	MessageReadStatus.belongsTo(Message, {
@@ -238,6 +245,13 @@ const defineAssociations = () => {
 	MessageReadStatus.belongsTo(User, {
 		foreignKey: 'user_id',
 		as: 'user',
+	})
+
+	// ==================== FILE RELATIONSHIPS ====================
+
+	File.belongsTo(Message, {
+		foreignKey: 'message_id',
+		as: 'message',
 	})
 
 	// ==================== DELETED MESSAGE RELATIONSHIPS ====================
@@ -286,6 +300,7 @@ const db = {
 	MessageReadStatus,
 	DeletedMessage,
 	GroupEncryptedKey,
+	File,
 }
 
 module.exports = db
