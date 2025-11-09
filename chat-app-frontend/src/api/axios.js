@@ -9,6 +9,7 @@ const axiosInstance = axios.create({
 	headers: {
 		'Content-Type': 'application/json',
 	},
+	timeout: 30000, // 30 sekund domyślny timeout (dla uploadów używamy większego w filesApi)
 })
 
 // Interceptor - automatycznie dodaje token do każdego requesta

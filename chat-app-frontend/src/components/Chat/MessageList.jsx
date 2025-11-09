@@ -9,6 +9,7 @@ import {
 } from '../../utils/encryption'
 import { decryptGroupMessage, getCachedGroupKey, cacheGroupKey, decryptGroupKey } from '../../utils/groupEncryption'
 import { keysApi } from '../../api/keysApi'
+import FilePreview from './FilePreview'
 
 const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMessagesEnabled, disappearingMessagesEnabledAt, disappearingTime }) => {
 	const { user, privateKeyDH } = useAuth()
@@ -507,8 +508,26 @@ const MessageList = ({ messages, conversation, onMessageDeleted, disappearingMes
 								</div>
 							)}
 
-							{/* Treść wiadomości (odszyfrowana lub plaintext) */}
-							<div style={{ fontSize: '14px', wordWrap: 'break-word' }}>{displayContent}</div>
+							{/* Treść wiadomości (odszyfrowana lub plaintext) - tylko jeśli nie jest placeholderem */}
+							{displayContent !== '[Plik]' && (
+								<div style={{ fontSize: '14px', wordWrap: 'break-word', marginBottom: message.files?.length > 0 ? '8px' : '0' }}>
+									{displayContent}
+								</div>
+							)}
+
+							{/* Pliki */}
+							{message.files && message.files.length > 0 && (
+								<div style={{ marginTop: displayContent !== '[Plik]' ? '8px' : '0' }}>
+									{message.files.map(file => (
+										<FilePreview
+											key={file.file_id}
+											file={file}
+											messageSenderId={message.sender_id}
+											currentUserId={user?.userId}
+										/>
+									))}
+								</div>
+							)}
 
 							{/* Ikona szyfrowania */}
 							{message.is_encrypted && (

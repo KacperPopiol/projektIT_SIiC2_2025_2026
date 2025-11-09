@@ -1,4 +1,5 @@
 const db = require('../models')
+const { Op } = require('sequelize')
 const jwt = require('jsonwebtoken')
 
 /**
@@ -33,12 +34,12 @@ module.exports = io => {
 		// ==================== WYSYŁANIE WIADOMOŚCI PRYWATNEJ ====================
 		socket.on('send_private_message', async data => {
 			try {
-				const { conversationId, content, isEncrypted = false } = data
+				const { conversationId, content, isEncrypted = false, fileIds = [] } = data
 
-				// Walidacja danych
-				if (!conversationId || !content?.trim()) {
+				// Walidacja danych (content lub fileIds musi być)
+				if (!conversationId || (!content?.trim() && (!data.fileIds || data.fileIds.length === 0))) {
 					socket.emit('error', {
-						message: 'Brak wymaganych danych (conversationId lub content)',
+						message: 'Brak wymaganych danych (conversationId oraz content lub fileIds)',
 						code: 'INVALID_DATA',
 					})
 					return
@@ -77,8 +78,6 @@ module.exports = io => {
 					const otherUserId = otherParticipant.user_id
 
 					// ✅ SPRAWDŹ CZY ISTNIEJE ZAAKCEPTOWANA ZNAJOMOŚĆ
-					const { Op } = require('sequelize')
-
 					const friendship = await db.Contact.findOne({
 						where: {
 							status: 'accepted',
@@ -103,9 +102,15 @@ module.exports = io => {
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: content,
+					content: content || '[Plik]', // Jeśli tylko pliki, content może być pusty
 					is_encrypted: isEncrypted,
 				})
+
+				// Aktualizuj message_id dla plików jeśli są
+				if (fileIds && fileIds.length > 0) {
+					const fileController = require('../controllers/fileController')
+					await fileController.updateFilesMessageId(fileIds, message.message_id)
+				}
 
 				// Pobierz ustawienia konwersacji (czy tryb znikających włączony)
 				const conversationSettings = await db.Conversation.findByPk(conversationId, {
@@ -163,15 +168,31 @@ module.exports = io => {
 					}
 				}
 
+				// Pobierz pliki dla wiadomości
+				const files = fileIds && fileIds.length > 0 
+					? await db.File.findAll({
+							where: { file_id: { [Op.in]: fileIds } },
+							attributes: ['file_id', 'original_name', 'file_type', 'file_size', 'mime_category', 'thumbnail_path'],
+						})
+					: []
+
 				// Wyślij wiadomość do wszystkich uczestników konwersacji
 				const messageData = {
 					messageId: message.message_id,
 					conversationId,
 					senderId: socket.userId,
 					senderUsername: socket.username,
-					content: content.trim(),
+					content: content ? content.trim() : '[Plik]',
 					createdAt: message.created_at,
 					isEncrypted: message.is_encrypted,
+					files: files.map(f => ({
+						file_id: f.file_id,
+						original_name: f.original_name,
+						file_type: f.file_type,
+						file_size: f.file_size,
+						mime_category: f.mime_category,
+						thumbnail_path: f.thumbnail_path,
+					})),
 				}
 
 				participants.forEach(participant => {
@@ -196,7 +217,7 @@ module.exports = io => {
 		// ==================== WYSYŁANIE WIADOMOŚCI GRUPOWEJ ====================
 		socket.on('send_group_message', async data => {
 			try {
-				const { conversationId, groupId, content, encryptedContent, recipientKeys, isEncrypted } = data
+				const { conversationId, groupId, content, encryptedContent, recipientKeys, isEncrypted, fileIds = [] } = data
 
 				console.log('📨 Otrzymano wiadomość grupową:', {
 					conversationId,
@@ -211,10 +232,10 @@ module.exports = io => {
 				const messageContent = encryptedContent || content
 				const encrypted = isEncrypted === true
 
-				// Walidacja podstawowa
-				if (!conversationId || !groupId || !messageContent) {
+				// Walidacja podstawowa (messageContent lub fileIds musi być)
+				if (!conversationId || !groupId || (!messageContent && (!fileIds || fileIds.length === 0))) {
 					socket.emit('error', {
-						message: 'Nieprawidłowe dane wiadomości grupowej',
+						message: 'Nieprawidłowe dane wiadomości grupowej (brak treści lub plików)',
 						code: 'INVALID_DATA',
 					})
 					return
@@ -253,10 +274,16 @@ module.exports = io => {
 				const message = await db.Message.create({
 					conversation_id: conversationId,
 					sender_id: socket.userId,
-					content: messageContent,
+					content: messageContent || '[Plik]', // Jeśli tylko pliki, content może być pusty
 					is_encrypted: encrypted,
 					recipient_keys: encrypted ? JSON.stringify(recipientKeys) : null,
 				})
+
+				// Aktualizuj message_id dla plików jeśli są
+				if (fileIds && fileIds.length > 0) {
+					const fileController = require('../controllers/fileController')
+					await fileController.updateFilesMessageId(fileIds, message.message_id)
+				}
 
 				// Pobierz ustawienia konwersacji (czy tryb znikających włączony)
 				const conversationSettings = await db.Conversation.findByPk(conversationId, {
@@ -320,6 +347,14 @@ module.exports = io => {
 					await db.MessageReadStatus.bulkCreate(readStatuses)
 				}
 
+				// Pobierz pliki dla wiadomości
+				const files = fileIds && fileIds.length > 0 
+					? await db.File.findAll({
+							where: { file_id: { [Op.in]: fileIds } },
+							attributes: ['file_id', 'original_name', 'file_type', 'file_size', 'mime_category', 'thumbnail_path'],
+						})
+					: []
+
 				// ✅ Wyślij do wszystkich członków (z odpowiednimi danymi)
 				groupMembers.forEach(member => {
 					const messageData = {
@@ -332,6 +367,14 @@ module.exports = io => {
 						isEncrypted: encrypted,
 						createdAt: message.created_at,
 						encryptedGroupKey: encrypted ? recipientKeys[member.user_id] : null,
+						files: files.map(f => ({
+							file_id: f.file_id,
+							original_name: f.original_name,
+							file_type: f.file_type,
+							file_size: f.file_size,
+							mime_category: f.mime_category,
+							thumbnail_path: f.thumbnail_path,
+						})),
 					}
 
 					// Wyślij wiadomość
