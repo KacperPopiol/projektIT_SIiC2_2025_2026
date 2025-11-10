@@ -62,6 +62,11 @@ module.exports = (sequelize, DataTypes) => {
 				defaultValue: 60,
 				allowNull: false,
 			},
+			theme_preference: {
+				type: DataTypes.ENUM('light', 'dark'),
+				allowNull: false,
+				defaultValue: 'light',
+			},
 		},
 		{
 			tableName: 'users',

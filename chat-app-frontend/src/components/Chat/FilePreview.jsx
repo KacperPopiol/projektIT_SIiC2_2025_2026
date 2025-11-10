@@ -4,6 +4,17 @@ import { filesApi } from '../../api/filesApi'
 const MAX_PREVIEW_WIDTH = 240
 const MAX_PREVIEW_HEIGHT = 240
 
+const palette = {
+	surface: 'var(--color-surface)',
+	surfaceMuted: 'var(--card-bg)',
+	border: 'var(--color-border)',
+	borderStrong: 'var(--color-border-strong)',
+	textPrimary: 'var(--color-text-primary)',
+	textSecondary: 'var(--color-text-secondary)',
+	textMuted: 'var(--color-text-muted)',
+	accent: 'var(--color-accent)'
+}
+
 const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 	const [imageError, setImageError] = useState(false)
 	const [showFullImage, setShowFullImage] = useState(false)
@@ -91,13 +102,13 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						width: '300px',
 						height: '150px',
 						borderRadius: '8px',
-						backgroundColor: '#f0f0f0',
+						backgroundColor: palette.surfaceMuted,
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 					}}>
-					<div style={{ textAlign: 'center', color: '#666', fontSize: '12px' }}>
+					<div style={{ textAlign: 'center', color: palette.textMuted, fontSize: '12px' }}>
 						<div style={{ marginBottom: '5px' }}>⏳</div>
 						<div>Ładowanie...</div>
 					</div>
@@ -115,8 +126,8 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 					justifyContent: 'center',
 					borderRadius: '8px',
 					overflow: 'hidden',
-					border: '1px solid #ddd',
-					backgroundColor: '#f0f0f0',
+					border: `1px solid ${palette.border}`,
+					backgroundColor: palette.surfaceMuted,
 					maxWidth: `${MAX_PREVIEW_WIDTH}px`,
 					maxHeight: `${MAX_PREVIEW_HEIGHT}px`,
 					cursor: 'pointer',
@@ -182,13 +193,13 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						width: '150px',
 						height: '150px',
 						borderRadius: '8px',
-						backgroundColor: '#f0f0f0',
+						backgroundColor: palette.surfaceMuted,
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 					}}>
-					<div style={{ textAlign: 'center', color: '#666', fontSize: '12px' }}>
+					<div style={{ textAlign: 'center', color: palette.textMuted, fontSize: '12px' }}>
 						<div style={{ marginBottom: '5px' }}>⏳</div>
 						<div>Ładowanie...</div>
 					</div>
@@ -203,8 +214,8 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 					justifyContent: 'center',
 					borderRadius: '8px',
 					overflow: 'hidden',
-					border: '1px solid #ddd',
-					backgroundColor: '#000',
+					border: `1px solid ${palette.border}`,
+					backgroundColor: palette.borderStrong,
 					maxWidth: `${MAX_PREVIEW_WIDTH}px`,
 					maxHeight: `${MAX_PREVIEW_HEIGHT}px`,
 				}}>
@@ -232,15 +243,15 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						width: '150px',
 						height: '150px',
 						borderRadius: '8px',
-						backgroundColor: '#f0f0f0',
+						backgroundColor: palette.surfaceMuted,
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 						flexDirection: 'column',
 					}}>
 					<div style={{ fontSize: '32px', marginBottom: '5px' }}>🎵</div>
-					<div style={{ textAlign: 'center', color: '#666', fontSize: '12px' }}>
+					<div style={{ textAlign: 'center', color: palette.textMuted, fontSize: '12px' }}>
 						<div>⏳</div>
 						<div>Ładowanie...</div>
 					</div>
@@ -253,11 +264,11 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 					width: '150px',
 					padding: '10px',
 					borderRadius: '8px',
-					border: '1px solid #ddd',
-					backgroundColor: '#f8f9fa',
+					border: `1px solid ${palette.border}`,
+					backgroundColor: palette.surface,
 				}}>
 				<div style={{ fontSize: '24px', marginBottom: '8px', textAlign: 'center' }}>🎵</div>
-				<div style={{ fontSize: '11px', color: '#666', marginBottom: '8px', textAlign: 'center', wordBreak: 'break-word' }}>
+				<div style={{ fontSize: '11px', color: palette.textMuted, marginBottom: '8px', textAlign: 'center', wordBreak: 'break-word' }}>
 					{file.original_name}
 				</div>
 				<audio controls style={{ width: '100%', height: '32px' }}>
@@ -276,15 +287,15 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						width: '150px',
 						height: '150px',
 						borderRadius: '8px',
-						backgroundColor: '#f0f0f0',
+						backgroundColor: palette.surfaceMuted,
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 						flexDirection: 'column',
 					}}>
 					<div style={{ fontSize: '32px', marginBottom: '5px' }}>📄</div>
-					<div style={{ textAlign: 'center', color: '#666', fontSize: '12px' }}>
+					<div style={{ textAlign: 'center', color: palette.textMuted, fontSize: '12px' }}>
 						<div>⏳</div>
 						<div>Ładowanie...</div>
 					</div>
@@ -296,10 +307,10 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 				style={{
 					width: '150px',
 					height: '150px',
-					border: '1px solid #ddd',
+					border: `1px solid ${palette.border}`,
 					borderRadius: '8px',
 					overflow: 'hidden',
-					backgroundColor: '#fff',
+					backgroundColor: palette.surface,
 					cursor: 'pointer',
 				}}
 				onClick={() => window.open(fileUrl, '_blank')}>
@@ -315,10 +326,10 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						textAlign: 'center',
 					}}>
 					<div style={{ fontSize: '48px', marginBottom: '5px' }}>📄</div>
-					<div style={{ fontSize: '10px', color: '#666', wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+					<div style={{ fontSize: '10px', color: palette.textMuted, wordBreak: 'break-word', overflow: 'hidden', textOverflow: 'ellipsis' }}>
 						{file.original_name}
 					</div>
-					<div style={{ fontSize: '9px', color: '#999', marginTop: '3px' }}>Kliknij aby otworzyć</div>
+					<div style={{ fontSize: '9px', color: palette.textSecondary, marginTop: '3px' }}>Kliknij aby otworzyć</div>
 				</div>
 			</div>
 		)
@@ -332,15 +343,15 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 						width: '150px',
 						height: '150px',
 						borderRadius: '8px',
-						backgroundColor: '#f0f0f0',
+						backgroundColor: palette.surfaceMuted,
 						display: 'flex',
 						alignItems: 'center',
 						justifyContent: 'center',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 						flexDirection: 'column',
 					}}>
 					<div style={{ fontSize: '32px', marginBottom: '5px' }}>{getFileIcon()}</div>
-					<div style={{ textAlign: 'center', color: '#666', fontSize: '12px' }}>
+					<div style={{ textAlign: 'center', color: palette.textMuted, fontSize: '12px' }}>
 						<div>⏳</div>
 						<div>Ładowanie...</div>
 					</div>
@@ -368,10 +379,10 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 				style={{
 					width: '150px',
 					height: '150px',
-					border: '1px solid #ddd',
+					border: `1px solid ${palette.border}`,
 					borderRadius: '8px',
 					overflow: 'hidden',
-					backgroundColor: '#fff',
+					backgroundColor: palette.surface,
 					cursor: 'pointer',
 					display: 'flex',
 					flexDirection: 'column',
@@ -386,7 +397,7 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 				<div
 					style={{
 						fontSize: '10px',
-						color: '#666',
+						color: palette.textMuted,
 						wordBreak: 'break-word',
 						overflow: 'hidden',
 						textOverflow: 'ellipsis',
@@ -397,8 +408,8 @@ const FilePreview = ({ file, messageSenderId, currentUserId }) => {
 					}}>
 					{file.original_name}
 				</div>
-				<div style={{ fontSize: '9px', color: '#999' }}>{filesApi.formatFileSize(file.file_size)}</div>
-				<div style={{ fontSize: '9px', color: '#007bff', marginTop: '5px' }}>Kliknij aby pobrać</div>
+				<div style={{ fontSize: '9px', color: palette.textSecondary }}>{filesApi.formatFileSize(file.file_size)}</div>
+				<div style={{ fontSize: '9px', color: palette.accent, marginTop: '5px' }}>Kliknij aby pobrać</div>
 			</div>
 		)
 	}

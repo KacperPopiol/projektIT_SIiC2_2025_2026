@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SocketProvider } from './contexts/SocketContext'
 import { NotificationProvider } from './contexts/NotificationContext'
+import { ThemeProvider } from './contexts/ThemeContext'
 import ProtectedRoute from './components/Common/ProtectedRoute'
 import ContactsPage from './pages/ContactsPage'
 import GroupsPage from './pages/GroupsPage'
@@ -19,6 +20,7 @@ function App() {
 	return (
 		<BrowserRouter>
 			<AuthProvider>
+				<ThemeProvider>
 				<SocketProvider>
 					<NotificationProvider>
 						<Routes>
@@ -68,6 +70,7 @@ function App() {
 					</Routes>
 					</NotificationProvider>
 				</SocketProvider>
+				</ThemeProvider>
 			</AuthProvider>
 		</BrowserRouter>
 	)
