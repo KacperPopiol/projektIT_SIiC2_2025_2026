@@ -4,7 +4,7 @@ const TypingIndicator = ({ username }) => {
 			style={{
 				padding: '10px 20px',
 				fontSize: '12px',
-				color: '#666',
+				color: 'var(--color-text-muted)',
 				fontStyle: 'italic',
 			}}>
 			{username} pisze...

@@ -32,8 +32,8 @@ const DisappearingMessagesBanner = ({ disappearingTime }) => {
     return (
         <div
             style={{
-                backgroundColor: '#fff3cd',
-                border: '2px solid #ffc107',
+                backgroundColor: 'var(--alert-warning-bg)',
+                border: '2px solid var(--alert-warning-border)',
                 padding: '12px 16px',
                 borderRadius: '8px',
                 margin: '0 15px 15px 15px',
@@ -44,10 +44,10 @@ const DisappearingMessagesBanner = ({ disappearingTime }) => {
             }}>
             <span style={{ fontSize: '20px' }}>⏱️</span>
             <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#856404' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '14px', color: 'var(--alert-warning-text)' }}>
                     Tryb znikających wiadomości aktywny
                 </div>
-                <div style={{ fontSize: '12px', color: '#856404', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--alert-warning-text)', marginTop: '2px' }}>
                     Wiadomości w tym czacie znikają po {timeText} od przeczytania
                 </div>
             </div>

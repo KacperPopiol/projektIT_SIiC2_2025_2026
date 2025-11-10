@@ -38,6 +38,14 @@ const MessageList = ({
 		}
 		return CHAT_THEMES[0].variables
 	}, [activeTheme])
+	const isCssVariable = value => typeof value === 'string' && value.startsWith('var(')
+	const accentColor = themeVariables.accentColor || 'var(--color-accent)'
+	const systemBorderColor =
+		themeVariables.systemBorderColor || (isCssVariable(accentColor) ? 'var(--chat-system-border)' : `${accentColor}22`)
+	const systemBackgroundColor =
+		themeVariables.systemBackgroundColor ||
+		(isCssVariable(accentColor) ? 'var(--chat-system-background)' : 'rgba(255,255,255,0.6)')
+	const systemTextColor = themeVariables.systemTextColor || 'var(--chat-system-text)'
 
 	const scrollToBottom = () => {
 		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -369,12 +377,12 @@ const MessageList = ({
 					flexDirection: 'column',
 					justifyContent: 'center',
 					alignItems: 'center',
-					color: '#999',
+					color: 'var(--color-text-muted)',
 				}}>
 				{loadingKeys ? (
 					<>
 						<p>🔑 Inicjalizacja kluczy szyfrowania...</p>
-						<p style={{ fontSize: '12px' }}>
+						<p style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
 							{conversation?.type === 'private' ? 'Wyliczam shared secret (ECDH)' : 'Ładowanie klucza grupowego'}
 						</p>
 					</>
@@ -397,13 +405,13 @@ const MessageList = ({
 			{conversation?.type === 'private' && (
 				<div
 					style={{
-						backgroundColor: sharedSecretAES ? '#d4edda' : '#fff3cd',
-						border: `1px solid ${sharedSecretAES ? '#c3e6cb' : '#ffeaa7'}`,
+						backgroundColor: sharedSecretAES ? 'var(--alert-success-bg)' : 'var(--alert-warning-bg)',
+						border: `1px solid ${sharedSecretAES ? 'var(--alert-success-border)' : 'var(--alert-warning-border)'}`,
 						borderRadius: '8px',
 						padding: '10px',
 						marginBottom: '15px',
 						fontSize: '12px',
-						color: '#333',
+						color: sharedSecretAES ? 'var(--alert-success-text)' : 'var(--alert-warning-text)',
 						textAlign: 'center',
 					}}>
 					{loadingKeys ? (
@@ -420,13 +428,13 @@ const MessageList = ({
 			{conversation?.type === 'group' && (
 				<div
 					style={{
-						backgroundColor: groupKey ? '#d4edda' : '#fff3cd',
-						border: `1px solid ${groupKey ? '#c3e6cb' : '#ffeaa7'}`,
+						backgroundColor: groupKey ? 'var(--alert-success-bg)' : 'var(--alert-warning-bg)',
+						border: `1px solid ${groupKey ? 'var(--alert-success-border)' : 'var(--alert-warning-border)'}`,
 						borderRadius: '8px',
 						padding: '10px',
 						marginBottom: '15px',
 						fontSize: '12px',
-						color: '#333',
+						color: groupKey ? 'var(--alert-success-text)' : 'var(--alert-warning-text)',
 						textAlign: 'center',
 					}}>
 					{loadingKeys ? (
@@ -460,14 +468,14 @@ const MessageList = ({
 								<div
 									style={{
 										maxWidth: '70%',
-										backgroundColor: 'rgba(255,255,255,0.6)',
+										backgroundColor: systemBackgroundColor,
 										borderRadius: '999px',
 										padding: '8px 16px',
 										fontSize: '12px',
-										color: themeVariables.systemTextColor,
+										color: systemTextColor,
 										textAlign: 'center',
-										boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-										border: `1px solid ${themeVariables.accentColor}33`,
+									boxShadow: 'var(--shadow-sm)',
+										border: `1px solid ${systemBorderColor}`,
 										backdropFilter: 'blur(4px)',
 									}}>
 									{message.content}
@@ -611,7 +619,7 @@ const MessageList = ({
 										<span
 											style={{
 												fontSize: '10px',
-												color: remainingSeconds <= 10 ? '#dc3545' : '#ffc107',
+												color: remainingSeconds <= 10 ? 'var(--color-danger)' : 'var(--color-warning)',
 												fontWeight: 'bold',
 											}}>
 											⏱️ {remainingSeconds}s
@@ -632,8 +640,8 @@ const MessageList = ({
 										width: '24px',
 										height: '24px',
 										borderRadius: '50%',
-										backgroundColor: '#dc3545',
-										color: 'white',
+										backgroundColor: 'var(--button-danger-bg)',
+										color: 'var(--button-danger-text)',
 										border: 'none',
 										cursor: 'pointer',
 										fontSize: '12px',

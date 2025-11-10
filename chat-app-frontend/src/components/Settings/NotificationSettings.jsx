@@ -55,7 +55,7 @@ const NotificationSettings = () => {
                             left: 0,
                             right: 0,
                             bottom: 0,
-                            backgroundColor: checked ? '#28a745' : '#ccc',
+                            backgroundColor: checked ? 'var(--button-success-bg)' : 'var(--color-border)',
                             transition: '0.2s',
                             borderRadius: '999px',
                         }}
@@ -80,18 +80,14 @@ const NotificationSettings = () => {
     }
 
     return (
-        <div style={{ background: 'white', padding: '20px', borderRadius: '10px', border: '1px solid #eee' }}>
-            <h3 style={{ marginTop: 0 }}>🔔 Powiadomienia</h3>
-
-            <div style={{ marginBottom: '10px', fontSize: '13px', color: '#666' }}>Status uprawnień przeglądarki: {permission}</div>
-
-            {permission !== 'granted' && (
-                <button
-                    onClick={handleRequestPermission}
-                    style={{ padding: '8px 12px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '6px' }}>
-                    Poproś o uprawnienia
-                </button>
-            )}
+        <div style={{ background: 'var(--card-bg)', padding: '20px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
+            <h3>Powiadomienia przeglądarki</h3>
+            <div style={{ marginBottom: '10px', fontSize: '13px', color: 'var(--color-text-muted)' }}>Status uprawnień przeglądarki: {permission}</div>
+            <button
+                onClick={requestPermission}
+                style={{ padding: '8px 12px', background: 'var(--button-primary-bg)', color: 'var(--button-primary-text)', border: 'none', borderRadius: '6px' }}>
+                Poproś o uprawnienia
+            </button>
 
             <div style={{ marginTop: '15px' }}>
                 <Switch

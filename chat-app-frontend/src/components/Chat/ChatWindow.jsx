@@ -27,10 +27,17 @@ const ChatWindow = ({ conversation }) => {
 
 	const normalizeThemePayload = theme => {
 		if (!theme) return null
+		const key = theme.key || theme.themeKey || theme.id || 'default'
+		const baseDefinition = CHAT_THEMES.find(t => t.key === key) || CHAT_THEMES[0]
+		const resolvedVariables =
+			key === 'default'
+				? baseDefinition.variables
+				: theme.variables || theme.themeVariables || baseDefinition.variables || CHAT_THEMES[0].variables
+
 		return {
-			key: theme.key || theme.themeKey || theme.id || 'default',
-			name: theme.name || theme.themeName || theme.label || 'Motyw',
-			variables: theme.variables || theme.themeVariables || CHAT_THEMES[0].variables,
+			key,
+			name: theme.name || theme.themeName || theme.label || baseDefinition.name || 'Motyw',
+			variables: resolvedVariables,
 		}
 	}
 
@@ -45,6 +52,33 @@ const ChatWindow = ({ conversation }) => {
 		}
 		return CHAT_THEMES[0].variables
 	}, [activeTheme])
+
+	const isCssVariable = value => typeof value === 'string' && value.startsWith('var(')
+	const withOpacity = (color, fallbackVar, opacity = '33') => {
+		if (!color) {
+			return fallbackVar
+		}
+		return isCssVariable(color) ? fallbackVar : `${color}${opacity}`
+	}
+
+	const accentColor = themeVariables.accentColor || 'var(--color-accent)'
+	const headerBackgroundColor =
+		themeVariables.headerBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-header-bg)' : 'rgba(255,255,255,0.9)')
+	const headerBorderColor = themeVariables.headerBorderColor || withOpacity(accentColor, 'var(--chat-header-border)')
+	const menuBackgroundColor =
+		themeVariables.menuBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-menu-bg)' : 'rgba(255,255,255,0.95)')
+	const menuBorderColor = themeVariables.menuBorderColor || withOpacity(accentColor, 'var(--chat-menu-border)', '22')
+	const menuTextColor = themeVariables.menuTextColor || (isCssVariable(accentColor) ? 'var(--chat-menu-text)' : 'var(--color-text-primary)')
+	const typingBackgroundColor =
+		themeVariables.typingBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-typing-bg)' : 'var(--color-surface)')
+	const menuHoverBackgroundColor =
+		themeVariables.menuHoverBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-menu-hover-bg)' : 'var(--color-border)')
+	const handleMenuItemEnter = event => {
+		event.currentTarget.style.backgroundColor = menuHoverBackgroundColor
+	}
+	const handleMenuItemLeave = event => {
+		event.currentTarget.style.backgroundColor = menuBackgroundColor
+	}
 
 	const addMessageToList = newMessage => {
 		if (!newMessage || !newMessage.message_id) {
@@ -123,19 +157,19 @@ const ChatWindow = ({ conversation }) => {
 		const handleNewPrivateMessage = data => {
 			if (isSameConversation(data.conversationId)) {
 				addMessageToList({
-					message_id: data.messageId,
+						message_id: data.messageId,
 					conversation_id: Number(data.conversationId),
-					sender_id: data.senderId,
-					content: data.content,
-					is_encrypted: data.isEncrypted,
+						sender_id: data.senderId,
+						content: data.content,
+						is_encrypted: data.isEncrypted,
 					message_type: data.messageType || 'user',
 					system_payload: data.systemPayload || null,
-					created_at: data.createdAt,
-					sender: {
-						username: data.senderUsername,
-					},
-					readStatuses: [],
-					files: data.files || [], // Dodaj pliki z socket event
+						created_at: data.createdAt,
+						sender: {
+							username: data.senderUsername,
+						},
+						readStatuses: [],
+						files: data.files || [], // Dodaj pliki z socket event
 				})
 			}
 		}
@@ -145,19 +179,19 @@ const ChatWindow = ({ conversation }) => {
 			console.log('📨 New group message received:', data)
 			if (isSameConversation(data.conversationId)) {
 				addMessageToList({
-					message_id: data.messageId,
+						message_id: data.messageId,
 					conversation_id: Number(data.conversationId),
-					sender_id: data.senderId,
-					content: data.content,
-					is_encrypted: data.isEncrypted,
+						sender_id: data.senderId,
+						content: data.content,
+						is_encrypted: data.isEncrypted,
 					message_type: data.messageType || 'user',
 					system_payload: data.systemPayload || null,
-					created_at: data.createdAt,
-					sender: {
-						username: data.senderUsername,
-					},
-					readStatuses: [],
-					files: data.files || [], // Dodaj pliki z socket event
+						created_at: data.createdAt,
+						sender: {
+							username: data.senderUsername,
+						},
+						readStatuses: [],
+						files: data.files || [], // Dodaj pliki z socket event
 				})
 			}
 		}
@@ -518,7 +552,7 @@ const ChatWindow = ({ conversation }) => {
 				display: 'flex',
 				flexDirection: 'column',
 				height: '100%',
-				backgroundColor: themeVariables.backgroundColor,
+				backgroundColor: themeVariables.backgroundColor || 'var(--chat-background)',
 				backgroundImage: themeVariables.backgroundImage || 'none',
 				backgroundSize: 'cover',
 				backgroundPosition: 'center',
@@ -528,8 +562,8 @@ const ChatWindow = ({ conversation }) => {
 			<div
 				style={{
 					padding: '15px',
-					borderBottom: `1px solid ${themeVariables.accentColor}33`,
-					backgroundColor: 'rgba(255,255,255,0.9)',
+					borderBottom: `1px solid ${headerBorderColor}`,
+					backgroundColor: headerBackgroundColor,
 					backdropFilter: 'blur(6px)',
 					position: 'sticky',
 					top: 0,
@@ -542,12 +576,12 @@ const ChatWindow = ({ conversation }) => {
 					<h3 style={{ margin: 0 }}>
 						{conversation.type === 'group' ? '👥' : '💬'} {conversation.name}
 					</h3>
-					<p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
+					<p style={{ margin: '5px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
 						{conversation.type === 'group' ? 'Grupa' : 'Rozmowa prywatna'}
 						{connected ? (
-							<span style={{ color: themeVariables.accentColor, marginLeft: '6px' }}>• 🟢 Online</span>
+							<span style={{ color: accentColor, marginLeft: '6px' }}>• 🟢 Online</span>
 						) : (
-							<span style={{ color: '#dc3545', marginLeft: '6px' }}>• 🔴 Offline</span>
+							<span style={{ color: 'var(--color-danger)', marginLeft: '6px' }}>• 🔴 Offline</span>
 						)}
 					</p>
 				</div>
@@ -559,12 +593,12 @@ const ChatWindow = ({ conversation }) => {
 						disabled={menuLoading}
 						style={{
 							padding: '8px 12px',
-							backgroundColor: 'rgba(255,255,255,0.85)',
-							border: `1px solid ${themeVariables.accentColor}33`,
+							backgroundColor: themeVariables.menuBackgroundColor || 'rgba(255,255,255,0.85)',
+							border: `1px solid ${menuBorderColor}`,
 							borderRadius: '5px',
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
 							fontSize: '18px',
-							color: themeVariables.accentColor,
+							color: accentColor,
 						}}
 						title="Opcje">
 						⋮
@@ -577,13 +611,14 @@ const ChatWindow = ({ conversation }) => {
 								top: '100%',
 								right: 0,
 								marginTop: '5px',
-								backgroundColor: 'rgba(255,255,255,0.95)',
-								border: `1px solid ${themeVariables.accentColor}22`,
+								backgroundColor: menuBackgroundColor,
+								border: `1px solid ${menuBorderColor}`,
 								borderRadius: '8px',
 								boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
 								zIndex: 2000,
 								minWidth: '200px',
 								overflow: 'hidden',
+								color: menuTextColor,
 							}}>
 							<button
 								onClick={handleOpenThemeModal}
@@ -592,14 +627,15 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: 'white',
+									backgroundColor: menuBackgroundColor,
 									textAlign: 'left',
 									cursor: menuLoading || themeLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
-									borderBottom: '1px solid #f0f0f0',
+									borderBottom: `1px solid ${menuBorderColor}`,
+									color: menuTextColor,
 								}}
-								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								onMouseEnter={handleMenuItemEnter}
+								onMouseLeave={handleMenuItemLeave}>
 								🎨 Zmień motyw
 							</button>
 
@@ -610,14 +646,15 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: 'white',
+									backgroundColor: menuBackgroundColor,
 									textAlign: 'left',
 									cursor: menuLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
-									borderBottom: '1px solid #f0f0f0',
+									borderBottom: `1px solid ${menuBorderColor}`,
+									color: menuTextColor,
 								}}
-								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								onMouseEnter={handleMenuItemEnter}
+								onMouseLeave={handleMenuItemLeave}>
 								📥 Eksportuj do JSON
 							</button>
 
@@ -628,38 +665,40 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: 'white',
+									backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : 'var(--button-secondary-bg)',
 									textAlign: 'left',
 									cursor: menuLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
-									borderBottom: '1px solid #f0f0f0',
+									borderBottom: `1px solid ${menuBorderColor}`,
 									display: 'flex',
 									alignItems: 'center',
 									justifyContent: 'space-between',
+									color: menuTextColor,
 								}}
-								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								onMouseEnter={handleMenuItemEnter}
+								onMouseLeave={handleMenuItemLeave}>
 								<span>⏱️ Znikające wiadomości</span>
 								<span
 									style={{
 										width: '40px',
 										height: '20px',
-										backgroundColor: disappearingMessagesEnabled ? '#28a745' : '#ccc',
+										backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : 'var(--color-border)',
 										borderRadius: '10px',
 										position: 'relative',
 										transition: 'background-color 0.2s',
-									}}>
+									}}
+								>
 									<span
 										style={{
 											position: 'absolute',
 											width: '16px',
 											height: '16px',
-											backgroundColor: 'white',
+											backgroundColor: 'var(--color-surface)',
 											borderRadius: '50%',
 											top: '2px',
 											left: disappearingMessagesEnabled ? '22px' : '2px',
 											transition: 'left 0.2s',
-											boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+											boxShadow: 'var(--shadow-sm)',
 										}}
 									/>
 								</span>
@@ -672,14 +711,15 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: 'white',
+									backgroundColor: menuBackgroundColor,
 									textAlign: 'left',
 									cursor: menuLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
-									borderBottom: '1px solid #f0f0f0',
+									borderBottom: `1px solid ${menuBorderColor}`,
+									color: menuTextColor,
 								}}
-								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8f9fa')}
-								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								onMouseEnter={handleMenuItemEnter}
+								onMouseLeave={handleMenuItemLeave}>
 								📦 Archiwizuj konwersację
 							</button>
 
@@ -690,14 +730,14 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: 'white',
+									backgroundColor: menuBackgroundColor,
 									textAlign: 'left',
 									cursor: menuLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
-									color: '#dc3545',
+									color: 'var(--color-danger)',
 								}}
-								onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fff5f5')}
-								onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}>
+								onMouseEnter={handleMenuItemEnter}
+								onMouseLeave={handleMenuItemLeave}>
 								🗑️ Usuń całą konwersację
 							</button>
 						</div>
@@ -738,9 +778,9 @@ const ChatWindow = ({ conversation }) => {
 							style={{
 								padding: '10px 20px',
 								fontSize: '12px',
-								color: '#666',
+								color: 'var(--color-text-muted)',
 								fontStyle: 'italic',
-								backgroundColor: '#f8f9fa',
+								backgroundColor: typingBackgroundColor,
 							}}>
 							{typingUsers.map(u => u.username).join(', ')} {typingUsers.length === 1 ? 'pisze' : 'piszą'}...
 						</div>

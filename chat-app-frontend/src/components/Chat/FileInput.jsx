@@ -158,7 +158,7 @@ const FileInput = ({ onFilesSelected, selectedFiles = [], onRemoveFile }) => {
 				onClick={() => fileInputRef.current?.click()}
 				style={{
 					padding: '8px 12px',
-					backgroundColor: dragActive ? '#0056b3' : '#007bff',
+					backgroundColor: dragActive ? 'var(--button-primary-hover)' : 'var(--button-primary-bg)',
 					color: 'white',
 					border: 'none',
 					borderRadius: '6px',

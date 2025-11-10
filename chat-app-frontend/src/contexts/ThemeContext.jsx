@@ -1,0 +1,317 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { usersApi } from '../api/usersApi'
+import { storage } from '../utils/storage'
+import { useAuth } from '../hooks/useAuth'
+
+const ThemeContext = createContext()
+
+const ALLOWED_THEMES = ['light', 'dark']
+
+const CHAT_THEME_TOKENS = {
+	light: {
+		'--color-bg': '#f4f6fb',
+		'--color-surface': '#ffffff',
+		'--color-elevated': '#ffffff',
+		'--color-text-primary': '#1f2328',
+		'--color-text-secondary': '#4a5568',
+		'--color-text-muted': '#6c757d',
+		'--color-border': 'rgba(15, 23, 42, 0.08)',
+		'--color-border-strong': 'rgba(15, 23, 42, 0.16)',
+		'--color-link': '#0a66c2',
+		'--color-link-hover': '#084d91',
+		'--color-accent': '#007bff',
+		'--color-accent-soft': '#e7f1ff',
+		'--color-accent-contrast': '#ffffff',
+		'--color-secondary': '#6c757d',
+		'--color-secondary-contrast': '#ffffff',
+		'--color-info': '#17a2b8',
+		'--color-info-contrast': '#ffffff',
+		'--color-success': '#198754',
+		'--color-success-soft': '#d1f7df',
+		'--color-warning': '#f0ad4e',
+		'--color-warning-soft': '#fff3cd',
+		'--color-danger': '#dc3545',
+		'--color-danger-soft': '#fde2e4',
+
+		'--card-bg': '#ffffff',
+		'--card-border': 'var(--color-border)',
+		'--card-shadow': '0 2px 4px rgba(15, 23, 42, 0.08)',
+		'--badge-bg': '#eceff4',
+		'--badge-text': '#1f2328',
+		'--badge-danger-bg': '#fee2e2',
+		'--badge-danger-text': '#991b1b',
+		'--badge-success-bg': '#dcfce7',
+		'--badge-success-text': '#166534',
+		'--modal-backdrop': 'rgba(15, 23, 42, 0.35)',
+
+		'--button-primary-bg': '#007bff',
+		'--button-primary-hover': '#005cbe',
+		'--button-primary-text': '#ffffff',
+		'--button-secondary-bg': '#e9ecef',
+		'--button-secondary-hover': '#d8dbe0',
+		'--button-secondary-text': '#1f2328',
+		'--button-danger-bg': '#dc3545',
+		'--button-danger-hover': '#b52a36',
+		'--button-danger-text': '#ffffff',
+		'--button-success-bg': '#198754',
+		'--button-success-hover': '#146c43',
+		'--button-success-text': '#ffffff',
+
+		'--input-bg': '#ffffff',
+		'--input-border': 'rgba(15, 23, 42, 0.16)',
+		'--input-border-soft': 'rgba(15, 23, 42, 0.08)',
+		'--input-border-focus': 'rgba(0, 123, 255, 0.6)',
+		'--input-placeholder': '#9da4b2',
+
+		'--alert-success-bg': '#d1f7df',
+		'--alert-success-border': '#81d69b',
+		'--alert-success-text': '#0f5132',
+		'--alert-warning-bg': '#fff3cd',
+		'--alert-warning-border': '#f5d989',
+		'--alert-warning-text': '#856404',
+		'--alert-danger-bg': '#fde2e4',
+		'--alert-danger-border': '#f2a7b0',
+		'--alert-danger-text': '#842029',
+		'--alert-info-bg': '#d1ecf1',
+		'--alert-info-border': '#86cde4',
+		'--alert-info-text': '#0c5460',
+
+		'--chat-background': '#f4f6fb',
+		'--chat-surface': '#ffffff',
+		'--chat-header-bg': 'rgba(255, 255, 255, 0.92)',
+		'--chat-header-border': 'rgba(15, 23, 42, 0.08)',
+		'--chat-menu-bg': 'rgba(255, 255, 255, 0.97)',
+		'--chat-menu-border': 'rgba(15, 23, 42, 0.1)',
+		'--chat-menu-hover-bg': 'rgba(15, 23, 42, 0.06)',
+		'--chat-menu-text': '#1f2328',
+		'--chat-typing-bg': '#f8f9fa',
+		'--chat-system-border': 'rgba(15, 23, 42, 0.1)',
+		'--chat-system-background': 'rgba(255, 255, 255, 0.6)',
+		'--chat-input-border': 'rgba(15, 23, 42, 0.16)',
+		'--chat-input-border-soft': 'rgba(15, 23, 42, 0.08)',
+		'--chat-input-background': '#ffffff',
+		'--chat-bubble-incoming-bg': '#ffffff',
+		'--chat-bubble-incoming-text': '#1f2328',
+		'--chat-bubble-outgoing-bg': '#007bff',
+		'--chat-bubble-outgoing-text': '#ffffff',
+		'--chat-system-text': '#6c757d',
+
+		'--shadow-sm': '0 2px 4px rgba(15, 23, 42, 0.08)',
+		'--shadow-md': '0 12px 24px rgba(15, 23, 42, 0.12)',
+		'--scrollbar-track': 'rgba(15, 23, 42, 0.06)',
+		'--scrollbar-thumb': 'rgba(15, 23, 42, 0.25)',
+		'--scrollbar-thumb-hover': 'rgba(15, 23, 42, 0.35)',
+	},
+	dark: {
+		'--color-bg': '#0b1220',
+		'--color-surface': '#111a2e',
+		'--color-elevated': '#18243f',
+		'--color-text-primary': '#f8fafc',
+		'--color-text-secondary': '#cbd5f5',
+		'--color-text-muted': '#94a3b8',
+		'--color-border': 'rgba(148, 163, 184, 0.25)',
+		'--color-border-strong': 'rgba(148, 163, 184, 0.4)',
+		'--color-link': '#4dabf7',
+		'--color-link-hover': '#82cfff',
+		'--color-accent': '#38bdf8',
+		'--color-accent-soft': 'rgba(56, 189, 248, 0.16)',
+		'--color-accent-contrast': '#05101a',
+		'--color-secondary': '#475569',
+		'--color-secondary-contrast': '#f8fafc',
+		'--color-info': '#0ea5e9',
+		'--color-info-contrast': '#021019',
+		'--color-success': '#4ade80',
+		'--color-success-soft': 'rgba(28, 131, 58, 0.35)',
+		'--color-warning': '#fde047',
+		'--color-warning-soft': 'rgba(253, 224, 71, 0.2)',
+		'--color-danger': '#f87171',
+		'--color-danger-soft': 'rgba(248, 113, 113, 0.25)',
+
+		'--card-bg': '#111a2e',
+		'--card-border': 'rgba(148, 163, 184, 0.25)',
+		'--card-shadow': '0 14px 32px rgba(8, 47, 73, 0.45)',
+		'--badge-bg': 'rgba(148, 163, 184, 0.28)',
+		'--badge-text': '#e2e8f0',
+		'--badge-danger-bg': 'rgba(248, 113, 113, 0.25)',
+		'--badge-danger-text': '#fecdd3',
+		'--badge-success-bg': 'rgba(74, 222, 128, 0.25)',
+		'--badge-success-text': '#bbf7d0',
+		'--modal-backdrop': 'rgba(2, 6, 23, 0.65)',
+
+		'--button-primary-bg': '#38bdf8',
+		'--button-primary-hover': '#67d5ff',
+		'--button-primary-text': '#05101a',
+		'--button-secondary-bg': 'rgba(148, 163, 184, 0.2)',
+		'--button-secondary-hover': 'rgba(148, 163, 184, 0.35)',
+		'--button-secondary-text': '#e2e8f0',
+		'--button-danger-bg': 'rgba(248, 113, 113, 0.85)',
+		'--button-danger-hover': 'rgba(248, 113, 113, 1)',
+		'--button-danger-text': '#ffe4e6',
+		'--button-success-bg': 'rgba(34, 197, 94, 0.85)',
+		'--button-success-hover': 'rgba(34, 197, 94, 1)',
+		'--button-success-text': '#041b11',
+
+		'--input-bg': '#111a2e',
+		'--input-border': 'rgba(148, 163, 184, 0.35)',
+		'--input-border-soft': 'rgba(148, 163, 184, 0.25)',
+		'--input-border-focus': 'rgba(56, 189, 248, 0.5)',
+		'--input-placeholder': '#9da5c5',
+
+		'--alert-success-bg': 'rgba(28, 131, 58, 0.22)',
+		'--alert-success-border': 'rgba(74, 222, 128, 0.55)',
+		'--alert-success-text': '#bbf7d0',
+		'--alert-warning-bg': 'rgba(253, 224, 71, 0.18)',
+		'--alert-warning-border': 'rgba(250, 204, 21, 0.45)',
+		'--alert-warning-text': '#fef9c3',
+		'--alert-danger-bg': 'rgba(248, 113, 113, 0.18)',
+		'--alert-danger-border': 'rgba(248, 113, 113, 0.45)',
+		'--alert-danger-text': '#fecdd3',
+		'--alert-info-bg': 'rgba(14, 165, 233, 0.18)',
+		'--alert-info-border': 'rgba(14, 165, 233, 0.45)',
+		'--alert-info-text': '#bae6fd',
+
+		'--chat-background': '#050c18',
+		'--chat-surface': '#111a2e',
+		'--chat-header-bg': 'rgba(17, 26, 46, 0.92)',
+		'--chat-header-border': 'rgba(148, 163, 184, 0.25)',
+		'--chat-menu-bg': 'rgba(24, 36, 63, 0.97)',
+		'--chat-menu-border': 'rgba(148, 163, 184, 0.3)',
+		'--chat-menu-hover-bg': 'rgba(148, 163, 184, 0.12)',
+		'--chat-menu-text': '#f1f5f9',
+		'--chat-typing-bg': 'rgba(17, 26, 46, 0.85)',
+		'--chat-system-border': 'rgba(148, 163, 184, 0.3)',
+		'--chat-system-background': 'rgba(17, 26, 46, 0.7)',
+		'--chat-input-border': 'rgba(148, 163, 184, 0.35)',
+		'--chat-input-border-soft': 'rgba(148, 163, 184, 0.25)',
+		'--chat-input-background': '#111a2e',
+		'--chat-bubble-incoming-bg': 'rgba(226, 232, 240, 0.12)',
+		'--chat-bubble-incoming-text': '#f8fafc',
+		'--chat-bubble-outgoing-bg': 'var(--color-accent)',
+		'--chat-bubble-outgoing-text': '#05101a',
+		'--chat-system-text': '#94a3b8',
+
+		'--shadow-sm': '0 2px 6px rgba(8, 47, 73, 0.35)',
+		'--shadow-md': '0 14px 32px rgba(8, 47, 73, 0.45)',
+		'--scrollbar-track': 'rgba(15, 23, 42, 0.35)',
+		'--scrollbar-thumb': 'rgba(94, 106, 134, 0.6)',
+		'--scrollbar-thumb-hover': 'rgba(148, 163, 184, 0.75)',
+	},
+}
+
+const normalizeTheme = value => {
+	if (!value) return 'light'
+	return ALLOWED_THEMES.includes(value) ? value : 'light'
+}
+
+export const ThemeProvider = ({ children }) => {
+	const { isAuthenticated, loading: authLoading } = useAuth()
+	const [themeMode, setThemeMode] = useState(normalizeTheme(storage.getThemePreference()))
+	const [loadingTheme, setLoadingTheme] = useState(true)
+	const [savingTheme, setSavingTheme] = useState(false)
+	const [themeError, setThemeError] = useState(null)
+
+	const applyThemeLocally = useCallback(newTheme => {
+		const normalized = normalizeTheme(newTheme)
+		setThemeMode(normalized)
+		storage.setThemePreference(normalized)
+		return normalized
+	}, [])
+
+	useEffect(() => {
+		const initialize = async () => {
+			if (authLoading) {
+				return
+			}
+
+			try {
+				if (isAuthenticated) {
+					const response = await usersApi.getThemePreference()
+					const theme = normalizeTheme(response?.themePreference)
+					applyThemeLocally(theme)
+				} else {
+					const stored = normalizeTheme(storage.getThemePreference())
+					applyThemeLocally(stored)
+				}
+			} catch (error) {
+				console.error('Błąd pobierania preferencji motywu:', error)
+				const fallback = normalizeTheme(storage.getThemePreference())
+				applyThemeLocally(fallback)
+			} finally {
+				setLoadingTheme(false)
+			}
+		}
+
+		setLoadingTheme(true)
+		initialize()
+	}, [applyThemeLocally, authLoading, isAuthenticated])
+
+	const setThemePreference = useCallback(
+		async newTheme => {
+			const normalized = normalizeTheme(newTheme)
+			setThemeError(null)
+
+			const previousTheme = themeMode
+			const appliedTheme = applyThemeLocally(normalized)
+
+			if (!isAuthenticated) {
+				return { success: true, theme: appliedTheme, persisted: false }
+			}
+
+			try {
+				setSavingTheme(true)
+				const response = await usersApi.updateThemePreference(appliedTheme)
+				return {
+					success: true,
+					theme: normalizeTheme(response?.themePreference || appliedTheme),
+					persisted: true,
+				}
+			} catch (error) {
+				console.error('Błąd zapisywania preferencji motywu:', error)
+				setThemeError(error.response?.data?.error || 'Nie udało się zapisać motywu')
+				applyThemeLocally(previousTheme)
+				return { success: false, error }
+			} finally {
+				setSavingTheme(false)
+			}
+		},
+		[applyThemeLocally, isAuthenticated, themeMode]
+	)
+
+	const toggleTheme = useCallback(() => {
+		const nextTheme = themeMode === 'dark' ? 'light' : 'dark'
+		return setThemePreference(nextTheme)
+	}, [setThemePreference, themeMode])
+
+useEffect(() => {
+	const root = document.documentElement
+	root.setAttribute('data-theme', themeMode)
+	const tokens = CHAT_THEME_TOKENS[themeMode] || CHAT_THEME_TOKENS.light
+	Object.entries(tokens).forEach(([token, value]) => {
+		root.style.setProperty(token, value)
+	})
+}, [themeMode])
+
+	const value = useMemo(
+		() => ({
+			themeMode,
+			isDarkMode: themeMode === 'dark',
+			loadingTheme,
+			savingTheme,
+			themeError,
+			setThemePreference,
+			toggleTheme,
+		}),
+		[loadingTheme, savingTheme, setThemePreference, themeError, themeMode, toggleTheme]
+	)
+
+	return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+}
+
+export const useThemeContext = () => {
+	const context = useContext(ThemeContext)
+	if (!context) {
+		throw new Error('useThemeContext must be used within ThemeProvider')
+	}
+	return context
+}
+
