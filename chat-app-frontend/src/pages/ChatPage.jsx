@@ -443,6 +443,7 @@ const ChatPage = () => {
 													type: 'private',
 													name: otherUser?.username || 'Użytkownik',
 													conversationId: conv.conversation_id,
+													remoteUserId: otherUser?.user_id,
 												})
 											}
 											style={{

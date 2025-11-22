@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useWebRTC } from '../../hooks/useWebRTC'
 import { messagesApi } from '../../api/messagesApi'
 import { usersApi } from '../../api/usersApi'
 import { useSocket } from '../../hooks/useSocket'
@@ -7,6 +8,7 @@ import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import DisappearingMessagesBanner from './DisappearingMessagesBanner'
 import ThemePickerModal from './ThemePickerModal'
+import VideoCall from './VideoCall'
 import { CHAT_THEMES } from '../../constants/chatThemes'
 
 const ChatWindow = ({ conversation }) => {
@@ -22,6 +24,9 @@ const ChatWindow = ({ conversation }) => {
 	const [activeTheme, setActiveTheme] = useState(CHAT_THEMES[0])
 	const [themeModalOpen, setThemeModalOpen] = useState(false)
 	const [themeLoading, setThemeLoading] = useState(false)
+	const [remoteUserId, setRemoteUserId] = useState(null)
+	const [showVideoCall, setShowVideoCall] = useState(false)
+	const [callType, setCallType] = useState('video') // 'video' or 'audio'
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
 
@@ -122,7 +127,45 @@ const ChatWindow = ({ conversation }) => {
 	useEffect(() => {
 		loadMessages()
 		loadConversationSettings()
+		loadRemoteUserId()
 	}, [conversation.conversationId])
+
+	// Pobranie remoteUserId dla prywatnej konwersacji
+	const loadRemoteUserId = () => {
+		if (conversation.type !== 'private') {
+			setRemoteUserId(null)
+			return
+		}
+
+		// Jeśli remoteUserId jest przekazany jako prop (z ChatPage)
+		if (conversation.remoteUserId) {
+			setRemoteUserId(conversation.remoteUserId)
+			return
+		}
+
+		// Fallback: spróbuj pobrać z API
+		const fetchRemoteUserId = async () => {
+			try {
+				const conversationsResponse = await messagesApi.getConversations(false)
+				const privateConv = conversationsResponse.privateConversations?.find(
+					c => c.conversation_id === conversation.conversationId
+				)
+				
+				if (privateConv?.conversation?.participants) {
+					const otherParticipant = privateConv.conversation.participants.find(
+						p => p.user?.user_id !== user?.userId
+					)
+					if (otherParticipant?.user?.user_id) {
+						setRemoteUserId(otherParticipant.user.user_id)
+					}
+				}
+			} catch (error) {
+				console.error('Błąd pobierania remoteUserId:', error)
+			}
+		}
+
+		fetchRemoteUserId()
+	}
 
 	// Ładowanie listy motywów (raz na start)
 	useEffect(() => {
@@ -290,6 +333,8 @@ const ChatWindow = ({ conversation }) => {
 		socket.on('message_disappeared', handleMessageDisappeared)
 		socket.on('conversation_theme_changed', handleConversationThemeChanged)
 
+		// Przychodzące połączenia WebRTC są obsługiwane przez useWebRTC w VideoCallContainer
+
 		// Cleanup - usunięcie listenerów i opuszczenie pokoju
 		return () => {
 			console.log('🔌 Cleaning up socket listeners')
@@ -308,7 +353,7 @@ const ChatWindow = ({ conversation }) => {
 				socket.emit('leave_group', { groupId: conversation.groupId })
 			}
 		}
-	}, [socket, connected, conversation, user])
+	}, [socket, connected, conversation, user, remoteUserId])
 
 	// Automatyczne oznaczanie wiadomości jako przeczytane
 	useEffect(() => {
@@ -586,6 +631,52 @@ const ChatWindow = ({ conversation }) => {
 					</p>
 				</div>
 
+				{/* Przyciski do połączeń wideo/audio - tylko dla prywatnych konwersacji */}
+				{conversation.type === 'private' && remoteUserId && (
+					<div style={{ display: 'flex', gap: '8px', marginRight: '10px' }}>
+						<button
+							onClick={() => {
+								setCallType('video')
+								setShowVideoCall(true)
+							}}
+							style={{
+								padding: '8px 12px',
+								backgroundColor: accentColor,
+								color: 'white',
+								border: 'none',
+								borderRadius: '5px',
+								cursor: 'pointer',
+								fontSize: '16px',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '5px',
+							}}
+							title="Rozpocznij rozmowę wideo">
+							📹
+						</button>
+						<button
+							onClick={() => {
+								setCallType('audio')
+								setShowVideoCall(true)
+							}}
+							style={{
+								padding: '8px 12px',
+								backgroundColor: accentColor,
+								color: 'white',
+								border: 'none',
+								borderRadius: '5px',
+								cursor: 'pointer',
+								fontSize: '16px',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '5px',
+							}}
+							title="Rozpocznij rozmowę głosową">
+							📞
+						</button>
+					</div>
+				)}
+
 				{/* Menu dropdown */}
 				<div style={{ position: 'relative' }}>
 					<button
@@ -799,7 +890,83 @@ const ChatWindow = ({ conversation }) => {
 				onSelect={handleThemeSelect}
 				isSaving={themeLoading}
 			/>
+
+			{/* Komponent rozmowy wideo/audio - renderowany zawsze dla prywatnych konwersacji, aby obsłużyć przychodzące połączenia */}
+			{conversation.type === 'private' && remoteUserId && (
+				<VideoCallContainer
+					conversation={conversation}
+					remoteUserId={remoteUserId}
+					callType={callType}
+					shouldInitiateCall={showVideoCall}
+					onClose={() => {
+						setShowVideoCall(false)
+					}}
+				/>
+			)}
 		</div>
+	)
+}
+
+// Komponent wrapper do VideoCall z obsługą startu połączenia
+const VideoCallContainer = ({ conversation, remoteUserId, callType, shouldInitiateCall, onClose }) => {
+	const { socket } = useSocket()
+	const { user } = useAuth()
+	const {
+		isCallActive,
+		isIncomingCall,
+		isCalling,
+		callType: activeCallType,
+		callState,
+		localVideoRef,
+		remoteVideoRef,
+		startCall,
+		acceptCall,
+		rejectCall,
+		endCall,
+		toggleMute,
+		toggleVideo,
+	} = useWebRTC(socket, user?.userId, remoteUserId, conversation?.conversationId)
+
+	// Automatyczne rozpoczęcie połączenia gdy użytkownik kliknie przycisk
+	useEffect(() => {
+		if (shouldInitiateCall && !isCalling && !isCallActive && !isIncomingCall && callType) {
+			startCall(callType).catch(error => {
+				console.error('Błąd rozpoczęcia połączenia:', error)
+				// Komunikat błędu jest już wyświetlony w getLocalStream
+				// Zamknij komponent po krótkim opóźnieniu, aby użytkownik widział komunikat
+				setTimeout(() => {
+					onClose?.()
+				}, 100)
+			})
+		}
+	}, [shouldInitiateCall, callType, startCall, isCalling, isCallActive, isIncomingCall, onClose])
+
+	// Renderuj VideoCall tylko gdy jest aktywny call (rozpoczynany, przychodzący lub połączony)
+	if (!isCallActive && !isIncomingCall && !isCalling) {
+		return null
+	}
+
+	return (
+		<VideoCall
+			conversation={conversation}
+			remoteUserId={remoteUserId}
+			isCallActive={isCallActive}
+			isIncomingCall={isIncomingCall}
+			isCalling={isCalling}
+			callType={activeCallType || callType}
+			callState={callState}
+			localVideoRef={localVideoRef}
+			remoteVideoRef={remoteVideoRef}
+			acceptCall={acceptCall}
+			rejectCall={rejectCall}
+			endCall={() => {
+				endCall()
+				onClose?.()
+			}}
+			toggleMute={toggleMute}
+			toggleVideo={toggleVideo}
+			onClose={onClose}
+		/>
 	)
 }
 
