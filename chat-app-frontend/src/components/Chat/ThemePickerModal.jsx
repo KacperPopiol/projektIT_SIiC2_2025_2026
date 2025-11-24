@@ -6,7 +6,7 @@ const backdropStyle = {
 	left: 0,
 	right: 0,
 	bottom: 0,
-	backgroundColor: 'rgba(0,0,0,0.55)',
+	backgroundColor: 'var(--modal-backdrop)',
 	zIndex: 2000,
 	display: 'flex',
 	alignItems: 'center',
@@ -66,7 +66,7 @@ const ThemePickerModal = ({
 			<div style={modalStyles} onClick={e => e.stopPropagation()}>
 				<div style={headerStyles}>
 					<div>
-						<h2 style={{ margin: 0 }}>Wybierz motyw rozmowy</h2>
+						<h2 style={{ margin: 0, color: 'var(--color-text-primary)' }}>Wybierz motyw rozmowy</h2>
 						<p style={{ margin: '6px 0 0 0', color: 'var(--color-text-muted)', fontSize: '14px' }}>
 							Motyw zostanie ustawiony dla wszystkich uczestników konwersacji.
 						</p>
@@ -176,7 +176,7 @@ const ThemePickerModal = ({
 								</div>
 								<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 									<div>
-										<strong style={{ display: 'block', fontSize: '14px' }}>{theme.name}</strong>
+										<strong style={{ display: 'block', fontSize: '14px', color: 'var(--color-text-primary)' }}>{theme.name}</strong>
 										<span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>#{theme.key}</span>
 									</div>
 									{isActive && (

@@ -3,6 +3,7 @@ import { messagesApi } from '../../api/messagesApi'
 import { usersApi } from '../../api/usersApi'
 import { useSocket } from '../../hooks/useSocket'
 import { useAuth } from '../../hooks/useAuth'
+import { useThemeContext } from '../../contexts/ThemeContext'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import DisappearingMessagesBanner from './DisappearingMessagesBanner'
@@ -24,6 +25,7 @@ const ChatWindow = ({ conversation }) => {
 	const [themeLoading, setThemeLoading] = useState(false)
 	const { socket, connected } = useSocket()
 	const { user } = useAuth()
+	const { isDarkMode } = useThemeContext()
 
 	const normalizeThemePayload = theme => {
 		if (!theme) return null
@@ -62,17 +64,16 @@ const ChatWindow = ({ conversation }) => {
 	}
 
 	const accentColor = themeVariables.accentColor || 'var(--color-accent)'
-	const headerBackgroundColor =
-		themeVariables.headerBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-header-bg)' : 'rgba(255,255,255,0.9)')
-	const headerBorderColor = themeVariables.headerBorderColor || withOpacity(accentColor, 'var(--chat-header-border)')
-	const menuBackgroundColor =
-		themeVariables.menuBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-menu-bg)' : 'rgba(255,255,255,0.95)')
-	const menuBorderColor = themeVariables.menuBorderColor || withOpacity(accentColor, 'var(--chat-menu-border)', '22')
-	const menuTextColor = themeVariables.menuTextColor || (isCssVariable(accentColor) ? 'var(--chat-menu-text)' : 'var(--color-text-primary)')
+	// Użyj globalnego motywu dla headera i menu
+	const headerBackgroundColor = 'var(--chat-header-bg)'
+	const headerBorderColor = 'var(--chat-header-border)'
+	const headerTextColor = 'var(--color-text-primary)'
+	const menuBackgroundColor = 'var(--chat-menu-bg)'
+	const menuBorderColor = 'var(--chat-menu-border)'
+	const menuTextColor = 'var(--chat-menu-text)'
 	const typingBackgroundColor =
 		themeVariables.typingBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-typing-bg)' : 'var(--color-surface)')
-	const menuHoverBackgroundColor =
-		themeVariables.menuHoverBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-menu-hover-bg)' : 'var(--color-border)')
+	const menuHoverBackgroundColor = 'var(--chat-menu-hover-bg)'
 	const handleMenuItemEnter = event => {
 		event.currentTarget.style.backgroundColor = menuHoverBackgroundColor
 	}
@@ -571,9 +572,10 @@ const ChatWindow = ({ conversation }) => {
 					display: 'flex',
 					justifyContent: 'space-between',
 					alignItems: 'center',
+					color: headerTextColor,
 				}}>
 				<div>
-					<h3 style={{ margin: 0 }}>
+					<h3 style={{ margin: 0, color: headerTextColor }}>
 						{conversation.type === 'group' ? '👥' : '💬'} {conversation.name}
 					</h3>
 					<p style={{ margin: '5px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
@@ -593,7 +595,7 @@ const ChatWindow = ({ conversation }) => {
 						disabled={menuLoading}
 						style={{
 							padding: '8px 12px',
-							backgroundColor: themeVariables.menuBackgroundColor || 'rgba(255,255,255,0.85)',
+							backgroundColor: menuBackgroundColor,
 							border: `1px solid ${menuBorderColor}`,
 							borderRadius: '5px',
 							cursor: menuLoading ? 'not-allowed' : 'pointer',
@@ -665,7 +667,7 @@ const ChatWindow = ({ conversation }) => {
 									width: '100%',
 									padding: '12px 16px',
 									border: 'none',
-									backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : 'var(--button-secondary-bg)',
+									backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : menuBackgroundColor,
 									textAlign: 'left',
 									cursor: menuLoading ? 'not-allowed' : 'pointer',
 									fontSize: '14px',
@@ -673,7 +675,7 @@ const ChatWindow = ({ conversation }) => {
 									display: 'flex',
 									alignItems: 'center',
 									justifyContent: 'space-between',
-									color: menuTextColor,
+									color: disappearingMessagesEnabled ? 'var(--button-success-text)' : menuTextColor,
 								}}
 								onMouseEnter={handleMenuItemEnter}
 								onMouseLeave={handleMenuItemLeave}>
