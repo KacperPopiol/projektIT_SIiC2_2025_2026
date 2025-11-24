@@ -730,7 +730,7 @@ const ChatWindow = ({ conversation }) => {
 								🎨 Zmień motyw
 							</button>
 
-							<button
+							{/* <button
 								onClick={handleExportConversation}
 								disabled={menuLoading}
 								style={{
@@ -747,7 +747,7 @@ const ChatWindow = ({ conversation }) => {
 								onMouseEnter={handleMenuItemEnter}
 								onMouseLeave={handleMenuItemLeave}>
 								📥 Eksportuj do JSON
-							</button>
+							</button> */}
 
 							<button
 								onClick={handleToggleDisappearingMessages}
