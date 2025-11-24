@@ -16,6 +16,12 @@ import FileInput from './FileInput'
 import { filesApi } from '../../api/filesApi'
 import { CHAT_THEMES } from '../../constants/chatThemes'
 
+const isCssVariable = value => typeof value === 'string' && value.startsWith('var(')
+const withOpacity = (color, fallbackVar, opacity = '33') => {
+	if (!color) return fallbackVar
+	return isCssVariable(color) ? fallbackVar : `${color}${opacity}`
+}
+
 const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 	const [message, setMessage] = useState('')
 	const [sending, setSending] = useState(false)
@@ -29,6 +35,11 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 	const [uploadingFiles, setUploadingFiles] = useState(false)
 	const [uploadProgress, setUploadProgress] = useState({})
 	const theme = themeVariables || CHAT_THEMES[0].variables
+	const accentColor = theme.accentColor || 'var(--color-accent)'
+	const inputBorderColor = theme.inputBorderColor || 'var(--chat-input-border)'
+	const inputBorderSoftColor =
+		theme.inputBorderSoftColor || (isCssVariable(accentColor) ? 'var(--chat-input-border-soft)' : `${accentColor}22`)
+	const inputBackgroundColor = theme.inputBackgroundColor || 'var(--chat-input-background)'
 
 	// Inicjalizacja sekretów
 	useEffect(() => {
@@ -411,30 +422,29 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 			onSubmit={handleSubmit}
 			style={{
 				padding: '15px',
-				borderTop: `1px solid ${theme.accentColor}33`,
-				backgroundColor: 'rgba(255,255,255,0.92)',
+				borderTop: `1px solid ${inputBorderColor}`,
+				backgroundColor: inputBackgroundColor,
 				backdropFilter: 'blur(6px)',
 				display: 'flex',
 				flexDirection: 'column',
 				gap: '10px',
+				color: 'var(--color-text-primary)',
 			}}>
 			{/* Status szyfrowania */}
 			{conversation.type === 'private' && (
 				<div
 					style={{
 						fontSize: '11px',
-						color: sharedSecretAES ? theme.accentColor : '#ffc107',
+						color: sharedSecretAES ? accentColor : 'var(--color-warning)',
 						display: 'flex',
 						alignItems: 'center',
 						gap: '5px',
 					}}>
-					{loadingKeys ? (
-						<>⏳ Inicjalizacja kluczy szyfrowania...</>
-					) : sharedSecretAES ? (
-						<>🔒 Wiadomości szyfrowane end-to-end (ECDH + AES-256)</>
-					) : (
-						<>⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania</>
-					)}
+					{loadingKeys
+						? '⏳ Inicjalizacja kluczy szyfrowania...'
+						: sharedSecretAES
+							? '🔒 Wiadomości szyfrowane end-to-end (ECDH + AES-256)'
+							: '⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania'}
 				</div>
 			)}
 
@@ -442,18 +452,16 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 				<div
 					style={{
 						fontSize: '11px',
-						color: groupKey ? theme.accentColor : '#ffc107',
+						color: groupKey ? accentColor : 'var(--color-warning)',
 						display: 'flex',
 						alignItems: 'center',
 						gap: '5px',
 					}}>
-					{loadingKeys ? (
-						<>⏳ Inicjalizacja kluczy grupowych...</>
-					) : groupKey ? (
-						<>🔒 Wiadomości szyfrowane end-to-end (Klucz grupowy AES-256)</>
-					) : (
-						<>⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania</>
-					)}
+					{loadingKeys
+						? '⏳ Inicjalizacja kluczy grupowych...'
+						: groupKey
+							? '🔒 Wiadomości szyfrowane end-to-end (Klucz grupowy AES-256)'
+							: '⚠️ Szyfrowanie niedostępne - wiadomości wysyłane bez szyfrowania'}
 				</div>
 			)}
 
@@ -468,8 +476,8 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 								alignItems: 'center',
 								justifyContent: 'space-between',
 								padding: '6px 10px',
-								backgroundColor: 'rgba(255,255,255,0.85)',
-								border: `1px solid ${theme.accentColor}22`,
+								backgroundColor: inputBackgroundColor,
+								border: `1px solid ${inputBorderSoftColor}`,
 								borderRadius: '4px',
 								fontSize: '12px',
 							}}>
@@ -494,7 +502,7 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 									}}>
 									{file.name}
 								</span>
-								<span style={{ color: '#666', fontSize: '11px', whiteSpace: 'nowrap' }}>
+								<span style={{ color: 'var(--color-text-muted)', fontSize: '11px', whiteSpace: 'nowrap' }}>
 									({filesApi.formatFileSize(file.size)})
 								</span>
 							</div>
@@ -509,7 +517,7 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 								style={{
 									background: 'none',
 									border: 'none',
-									color: theme.accentColor,
+									color: accentColor,
 									cursor: 'pointer',
 									fontSize: '16px',
 									padding: '0 5px',
@@ -521,7 +529,7 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 						</div>
 					))}
 					{selectedFiles.length > 0 && (
-						<div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>
+						<div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
 							{selectedFiles.length}/5 plików
 						</div>
 					)}
@@ -531,14 +539,14 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 			{/* Progress bar dla uploadu */}
 			{uploadingFiles && uploadProgress.overall !== undefined && (
 				<div style={{ marginBottom: '10px' }}>
-					<div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+					<div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '5px' }}>
 						Przesyłanie plików: {uploadProgress.overall}%
 					</div>
 					<div
 						style={{
 							width: '100%',
 							height: '8px',
-							backgroundColor: '#e0e0e0',
+							backgroundColor: 'var(--color-border)',
 							borderRadius: '4px',
 							overflow: 'hidden',
 						}}>
@@ -546,7 +554,7 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 							style={{
 								width: `${uploadProgress.overall}%`,
 								height: '100%',
-								backgroundColor: theme.accentColor,
+								backgroundColor: accentColor,
 								transition: 'width 0.3s',
 							}}
 						/>
@@ -577,11 +585,13 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 						flex: 1,
 						padding: '10px 15px',
 						borderRadius: '20px',
-						border: `1px solid ${theme.accentColor}33`,
+						border: `1px solid ${inputBorderColor}`,
 						fontSize: '14px',
 						outline: 'none',
-						backgroundColor: sending || loadingKeys || uploadingFiles ? '#f5f5f5' : 'white',
+						backgroundColor:
+							sending || loadingKeys || uploadingFiles ? 'var(--scrollbar-track)' : inputBackgroundColor,
 						cursor: sending || loadingKeys || uploadingFiles ? 'not-allowed' : 'text',
+						color: 'var(--color-text-primary)',
 					}}
 				/>
 				<button
@@ -591,9 +601,12 @@ const MessageInput = ({ conversation, onMessageSent, themeVariables }) => {
 						padding: '10px 25px',
 						backgroundColor:
 							(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles
-								? '#ccc'
-								: theme.accentColor,
-						color: 'white',
+								? 'var(--button-secondary-bg)'
+								: accentColor,
+						color:
+							(!message.trim() && selectedFiles.length === 0) || !connected || sending || loadingKeys || uploadingFiles
+								? 'var(--button-secondary-text)'
+								: 'var(--button-primary-text)',
 						border: 'none',
 						borderRadius: '20px',
 						cursor:

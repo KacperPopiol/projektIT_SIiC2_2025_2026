@@ -35,6 +35,57 @@ exports.updateNotificationSettings = async (req, res) => {
 	}
 }
 
+exports.getThemePreference = async (req, res) => {
+	try {
+		const userId = req.user.userId
+		const user = await db.User.findByPk(userId, {
+			attributes: ['theme_preference'],
+		})
+
+		if (!user) {
+			return res.status(404).json({ error: 'Użytkownik nie znaleziony' })
+		}
+
+		return res.json({
+			success: true,
+			themePreference: user.theme_preference || 'light',
+		})
+	} catch (error) {
+		console.error('Błąd pobierania preferencji motywu:', error)
+		return res.status(500).json({ error: 'Błąd pobierania preferencji motywu' })
+	}
+}
+
+exports.updateThemePreference = async (req, res) => {
+	try {
+		const userId = req.user.userId
+		const { themePreference } = req.body
+
+		const allowed = ['light', 'dark']
+		if (!allowed.includes(themePreference)) {
+			return res.status(400).json({
+				error: 'Nieprawidłowy motyw. Dozwolone wartości: light, dark',
+			})
+		}
+
+		await db.User.update(
+			{
+				theme_preference: themePreference,
+			},
+			{ where: { user_id: userId } }
+		)
+
+		return res.json({
+			success: true,
+			message: 'Preferencja motywu została zapisana',
+			themePreference,
+		})
+	} catch (error) {
+		console.error('Błąd aktualizacji preferencji motywu:', error)
+		return res.status(500).json({ error: 'Błąd aktualizacji preferencji motywu' })
+	}
+}
+
 /**
  * Pobieranie domyślnego czasu znikania wiadomości
  */

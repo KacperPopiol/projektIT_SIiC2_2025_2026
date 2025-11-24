@@ -24,6 +24,68 @@ const ChatPage = () => {
 	const [loading, setLoading] = useState(true)
 	const { requestPermission } = useNotifications()
 
+	const ui = {
+		bg: 'var(--color-bg)',
+		surface: 'var(--color-surface)',
+		elevated: 'var(--color-elevated)',
+		border: 'var(--color-border)',
+		borderStrong: 'var(--color-border-strong)',
+		textPrimary: 'var(--color-text-primary)',
+		textSecondary: 'var(--color-text-secondary)',
+		textMuted: 'var(--color-text-muted)',
+		link: 'var(--color-link)',
+		accent: 'var(--color-accent)',
+		accentHover: 'var(--button-primary-hover)',
+		accentText: 'var(--button-primary-text)',
+		secondary: 'var(--color-secondary)',
+		secondaryText: 'var(--color-secondary-contrast)',
+		secondaryHover: 'var(--button-secondary-hover)',
+		success: 'var(--button-success-bg)',
+		successHover: 'var(--button-success-hover)',
+		successText: 'var(--button-success-text)',
+		successSoft: 'var(--color-success-soft)',
+		danger: 'var(--button-danger-bg)',
+		dangerText: 'var(--button-danger-text)',
+		dangerHover: 'var(--button-danger-hover)',
+		warning: 'var(--color-warning)',
+		info: 'var(--color-info)',
+		infoText: 'var(--color-info-contrast)',
+		cardShadow: 'var(--shadow-sm)',
+		scrollTrack: 'var(--scrollbar-track)',
+		mutedSurface: 'var(--card-bg)',
+		mutedBorder: 'var(--color-border)',
+		emptyIcon: 'var(--color-text-muted)',
+	}
+
+	const getConversationCardStyles = isSelected => ({
+		padding: '12px',
+		marginBottom: '8px',
+		backgroundColor: isSelected ? ui.accent : ui.surface,
+		color: isSelected ? ui.accentText : ui.textPrimary,
+		borderRadius: '8px',
+		cursor: 'pointer',
+		border: isSelected ? `2px solid ${ui.accentHover}` : `1px solid ${ui.border}`,
+		boxShadow: isSelected ? ui.cardShadow : 'none',
+		transition: 'all 0.2s ease',
+	})
+
+	const getParticipantAvatarStyle = (isSelected, hasAvatar) => ({
+		width: '35px',
+		height: '35px',
+		borderRadius: '50%',
+		backgroundColor: hasAvatar ? 'transparent' : isSelected ? ui.surface : ui.accent,
+		color: isSelected ? ui.accent : ui.accentText,
+		display: 'flex',
+		alignItems: 'center',
+		justifyContent: 'center',
+		fontSize: '14px',
+		fontWeight: 'bold',
+		backgroundSize: 'cover',
+		backgroundPosition: 'center',
+		border: isSelected ? `2px solid ${ui.accentHover}` : `2px solid ${ui.border}`,
+		flexShrink: 0,
+	})
+
 	useEffect(() => {
 		loadData()
 	}, [])
@@ -183,19 +245,21 @@ const ChatPage = () => {
 					height: '100vh',
 					flexDirection: 'column',
 					gap: '15px',
+					backgroundColor: ui.bg,
+					color: ui.textPrimary,
 				}}>
 				<div
 					style={{
 						width: '50px',
 						height: '50px',
-						border: '5px solid #f3f3f3',
-						borderTop: '5px solid #007bff',
+						border: `5px solid ${ui.scrollTrack}`,
+						borderTop: `5px solid ${ui.accent}`,
 						borderRadius: '50%',
 						animation: 'spin 1s linear infinite',
 					}}
 				/>
 				<h2>Ładowanie aplikacji...</h2>
-				<p style={{ color: '#666' }}>Socket.io: {connected ? '🟢 Połączono' : '🔴 Łączenie...'}</p>
+				<p style={{ color: ui.textMuted }}>Socket.io: {connected ? '🟢 Połączono' : '🔴 Łączenie...'}</p>
 				<style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -215,13 +279,13 @@ const ChatPage = () => {
 		}
 	}
 	return (
-		<div style={{ display: 'flex', height: '100vh' }}>
+		<div style={{ display: 'flex', height: '100vh', backgroundColor: ui.bg, color: ui.textPrimary }}>
 			{/* Sidebar - Lista konwersacji */}
 			<div
 				style={{
 					width: '320px',
-					borderRight: '1px solid #ddd',
-					backgroundColor: '#f8f9fa',
+					borderRight: `1px solid ${ui.border}`,
+					backgroundColor: ui.bg,
 					overflowY: 'auto',
 					display: 'flex',
 					flexDirection: 'column',
@@ -230,8 +294,9 @@ const ChatPage = () => {
 				<div
 					style={{
 						padding: '20px',
-						borderBottom: '2px solid #ddd',
-						backgroundColor: '#fff',
+						borderBottom: `2px solid ${ui.border}`,
+						backgroundColor: ui.surface,
+						boxShadow: ui.cardShadow,
 					}}>
 					<h3 style={{ margin: '0 0 10px 0', fontSize: '20px' }}>💬 Chat App</h3>
 					<div
@@ -247,8 +312,8 @@ const ChatPage = () => {
 								width: '40px',
 								height: '40px',
 								borderRadius: '50%',
-								backgroundColor: user?.avatarUrl ? 'transparent' : '#007bff',
-								color: 'white',
+								backgroundColor: user?.avatarUrl ? 'transparent' : ui.accent,
+								color: user?.avatarUrl ? ui.textPrimary : ui.accentText,
 								display: 'flex',
 								alignItems: 'center',
 								justifyContent: 'center',
@@ -257,13 +322,13 @@ const ChatPage = () => {
 								backgroundImage: user?.avatarUrl ? `url(${user.avatarUrl})` : 'none',
 								backgroundSize: 'cover',
 								backgroundPosition: 'center',
-								border: '2px solid #ddd',
+								border: `2px solid ${ui.border}`,
 							}}>
 							{!user?.avatarUrl && user?.username?.charAt(0).toUpperCase()}
 						</div>
 						<div style={{ flex: 1 }}>
 							<div style={{ fontWeight: 'bold', fontSize: '14px' }}>{user?.username}</div>
-							<div style={{ fontSize: '12px', color: '#666' }}>{connected ? '🟢 Online' : '🔴 Offline'}</div>
+							<div style={{ fontSize: '12px', color: ui.textMuted }}>{connected ? '🟢 Online' : '🔴 Offline'}</div>
 						</div>
 					</div>
 
@@ -272,8 +337,8 @@ const ChatPage = () => {
 						style={{
 							width: '100%',
 							padding: '8px',
-							backgroundColor: '#dc3545',
-							color: 'white',
+							backgroundColor: ui.danger,
+							color: ui.dangerText,
 							border: 'none',
 							borderRadius: '5px',
 							cursor: 'pointer',
@@ -288,8 +353,8 @@ const ChatPage = () => {
 							marginTop: '5px',
 							width: '100%',
 							padding: '5px 15px',
-							backgroundColor: '#17a2b8',
-							color: 'white',
+							backgroundColor: ui.info,
+							color: ui.infoText,
 							border: 'none',
 							borderRadius: '5px',
 							cursor: 'pointer',
@@ -302,8 +367,8 @@ const ChatPage = () => {
 				<div
 					style={{
 						display: 'flex',
-						borderBottom: '2px solid #ddd',
-						backgroundColor: '#fff',
+						borderBottom: `2px solid ${ui.border}`,
+						backgroundColor: ui.surface,
 					}}>
 					<button
 						onClick={() => setActiveTab('active')}
@@ -311,8 +376,8 @@ const ChatPage = () => {
 							flex: 1,
 							padding: '12px',
 							border: 'none',
-							backgroundColor: activeTab === 'active' ? '#007bff' : 'transparent',
-							color: activeTab === 'active' ? 'white' : '#666',
+							backgroundColor: activeTab === 'active' ? ui.accent : 'transparent',
+							color: activeTab === 'active' ? ui.accentText : ui.textMuted,
 							cursor: 'pointer',
 							fontWeight: activeTab === 'active' ? 'bold' : 'normal',
 							fontSize: '14px',
@@ -326,8 +391,8 @@ const ChatPage = () => {
 							flex: 1,
 							padding: '12px',
 							border: 'none',
-							backgroundColor: activeTab === 'archived' ? '#007bff' : 'transparent',
-							color: activeTab === 'archived' ? 'white' : '#666',
+							backgroundColor: activeTab === 'archived' ? ui.accent : 'transparent',
+							color: activeTab === 'archived' ? ui.accentText : ui.textMuted,
 							cursor: 'pointer',
 							fontWeight: activeTab === 'archived' ? 'bold' : 'normal',
 							fontSize: '14px',
@@ -337,207 +402,6 @@ const ChatPage = () => {
 					</button>
 				</div>
 
-				{/* Konwersacje prywatne
-				<div style={{ padding: '15px', flex: 1, overflowY: 'auto' }}>
-					<h4
-						style={{
-							fontSize: '13px',
-							color: '#666',
-							marginBottom: '10px',
-							textTransform: 'uppercase',
-							letterSpacing: '0.5px',
-						}}>
-						💬 Konwersacje Prywatne
-					</h4>
-					{!conversations.privateConversations || conversations.privateConversations.length === 0 ? (
-						<div
-							style={{
-								padding: '20px',
-								textAlign: 'center',
-								backgroundColor: '#fff',
-								borderRadius: '8px',
-								border: '1px dashed #ddd',
-							}}>
-							<p style={{ fontSize: '12px', color: '#999', margin: 0 }}>Brak konwersacji</p>
-							<p style={{ fontSize: '11px', color: '#bbb', margin: '5px 0 0 0' }}>Dodaj znajomych aby rozpocząć czat</p>
-						</div>
-					) : (
-						conversations.privateConversations.map(conv => {
-							const otherUser = conv.conversation?.participants?.[0]?.user
-							const lastMessage = conv.conversation?.messages?.[0]
-							const isSelected = selectedConversation?.id === conv.conversation_id
-
-							return (
-								<div
-									key={conv.conversation_id}
-									onClick={() =>
-										setSelectedConversation({
-											id: conv.conversation_id,
-											type: 'private',
-											name: otherUser?.username || 'Użytkownik',
-											conversationId: conv.conversation_id,
-										})
-									}
-									style={{
-										padding: '12px',
-										marginBottom: '8px',
-										backgroundColor: isSelected ? '#007bff' : '#fff',
-										color: isSelected ? '#fff' : '#000',
-										borderRadius: '8px',
-										cursor: 'pointer',
-										border: isSelected ? '2px solid #0056b3' : '1px solid #ddd',
-										transition: 'all 0.2s',
-									}}
-									onMouseEnter={e => {
-										if (!isSelected) {
-											e.currentTarget.style.backgroundColor = '#f0f0f0'
-										}
-									}}
-									onMouseLeave={e => {
-										if (!isSelected) {
-											e.currentTarget.style.backgroundColor = '#fff'
-										}
-									}}>
-									<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-										<div
-											style={{
-												width: '35px',
-												height: '35px',
-												borderRadius: '50%',
-												backgroundColor: isSelected ? '#fff' : '#007bff',
-												color: isSelected ? '#007bff' : '#fff',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center',
-												fontSize: '14px',
-												fontWeight: 'bold',
-												flexShrink: 0,
-											}}>
-											{otherUser?.username?.charAt(0).toUpperCase() || '?'}
-										</div>
-										<div style={{ flex: 1, minWidth: 0 }}>
-											<div style={{ fontWeight: 'bold', fontSize: '14px' }}>{otherUser?.username || 'Użytkownik'}</div>
-											{lastMessage && (
-												<div
-													style={{
-														fontSize: '12px',
-														opacity: 0.8,
-														marginTop: '3px',
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-														whiteSpace: 'nowrap',
-													}}>
-													{lastMessage.content}
-												</div>
-											)}
-										</div>
-									</div>
-								</div>
-							)
-						})
-					)}
-
-					Grupy
-					<h4
-						style={{
-							fontSize: '13px',
-							color: '#666',
-							marginTop: '25px',
-							marginBottom: '10px',
-							textTransform: 'uppercase',
-							letterSpacing: '0.5px',
-						}}>
-						👥 Grupy
-					</h4>
-					{!conversations.groupConversations || conversations.groupConversations.length === 0 ? (
-						<div
-							style={{
-								padding: '20px',
-								textAlign: 'center',
-								backgroundColor: '#fff',
-								borderRadius: '8px',
-								border: '1px dashed #ddd',
-							}}>
-							<p style={{ fontSize: '12px', color: '#999', margin: 0 }}>Brak grup</p>
-							<p style={{ fontSize: '11px', color: '#bbb', margin: '5px 0 0 0' }}>Utwórz lub dołącz do grupy</p>
-						</div>
-					) : (
-						conversations.groupConversations.map(groupMember => {
-							const group = groupMember.group
-							const lastMessage = group?.conversation?.messages?.[0]
-							const isSelected = selectedConversation?.id === group?.group_id
-
-							return (
-								<div
-									key={group?.group_id}
-									onClick={() =>
-										setSelectedConversation({
-											id: group?.group_id,
-											type: 'group',
-											name: group?.group_name || 'Grupa',
-											conversationId: group?.conversation?.conversation_id,
-											groupId: group?.group_id,
-										})
-									}
-									style={{
-										padding: '12px',
-										marginBottom: '8px',
-										backgroundColor: isSelected ? '#28a745' : '#fff',
-										color: isSelected ? '#fff' : '#000',
-										borderRadius: '8px',
-										cursor: 'pointer',
-										border: isSelected ? '2px solid #1e7e34' : '1px solid #ddd',
-										transition: 'all 0.2s',
-									}}
-									onMouseEnter={e => {
-										if (!isSelected) {
-											e.currentTarget.style.backgroundColor = '#f0f0f0'
-										}
-									}}
-									onMouseLeave={e => {
-										if (!isSelected) {
-											e.currentTarget.style.backgroundColor = '#fff'
-										}
-									}}>
-									<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-										<div
-											style={{
-												width: '35px',
-												height: '35px',
-												borderRadius: '50%',
-												backgroundColor: isSelected ? '#fff' : '#28a745',
-												color: isSelected ? '#28a745' : '#fff',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center',
-												fontSize: '16px',
-												flexShrink: 0,
-											}}>
-											👥
-										</div>
-										<div style={{ flex: 1, minWidth: 0 }}>
-											<div style={{ fontWeight: 'bold', fontSize: '14px' }}>{group?.group_name || 'Grupa'}</div>
-											{lastMessage && (
-												<div
-													style={{
-														fontSize: '12px',
-														opacity: 0.8,
-														marginTop: '3px',
-														overflow: 'hidden',
-														textOverflow: 'ellipsis',
-														whiteSpace: 'nowrap',
-													}}>
-													{lastMessage.sender?.username}: {lastMessage.content}
-												</div>
-											)}
-										</div>
-									</div>
-								</div>
-							)
-						})
-					)}
-				</div> */}
-
 				{/* Lista konwersacji - warunkowe renderowanie */}
 				<div style={{ padding: '15px', flex: 1, overflowY: 'auto' }}>
 					{activeTab === 'active' ? (
@@ -546,7 +410,7 @@ const ChatPage = () => {
 							<h4
 								style={{
 									fontSize: '13px',
-									color: '#666',
+									color: ui.textMuted,
 									marginBottom: '10px',
 									textTransform: 'uppercase',
 									letterSpacing: '0.5px',
@@ -558,11 +422,11 @@ const ChatPage = () => {
 									style={{
 										padding: '20px',
 										textAlign: 'center',
-										backgroundColor: '#fff',
+										backgroundColor: ui.surface,
 										borderRadius: '8px',
-										border: '1px dashed #ddd',
+										border: `1px dashed ${ui.border}`,
 									}}>
-									<p style={{ fontSize: '12px', color: '#999', margin: 0 }}>Brak aktywnych konwersacji</p>
+									<p style={{ fontSize: '12px', color: ui.textMuted, margin: 0 }}>Brak aktywnych konwersacji</p>
 								</div>
 							) : (
 								conversations.privateConversations.map(conv => {
@@ -584,11 +448,11 @@ const ChatPage = () => {
 											style={{
 												padding: '12px',
 												marginBottom: '8px',
-												backgroundColor: isSelected ? '#007bff' : '#fff',
-												color: isSelected ? '#fff' : '#000',
+												backgroundColor: isSelected ? ui.accent : ui.surface,
+												color: isSelected ? ui.accentText : ui.textPrimary,
 												borderRadius: '8px',
 												cursor: 'pointer',
-												border: isSelected ? '2px solid #0056b3' : '1px solid #ddd',
+												border: isSelected ? `2px solid ${ui.accentHover}` : `1px solid ${ui.border}`,
 											}}>
 											<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 												<div
@@ -596,8 +460,8 @@ const ChatPage = () => {
 														width: '35px',
 														height: '35px',
 														borderRadius: '50%',
-														backgroundColor: otherUser?.avatar_url ? 'transparent' : isSelected ? '#fff' : '#007bff',
-														color: isSelected ? '#007bff' : '#fff',
+													backgroundColor: otherUser?.avatar_url ? 'transparent' : isSelected ? ui.surface : ui.accent,
+													color: isSelected ? ui.accent : ui.accentText,
 														display: 'flex',
 														alignItems: 'center',
 														justifyContent: 'center',
@@ -606,7 +470,7 @@ const ChatPage = () => {
 														backgroundImage: otherUser?.avatar_url ? `url(${otherUser.avatar_url})` : 'none',
 														backgroundSize: 'cover',
 														backgroundPosition: 'center',
-														border: isSelected ? '2px solid #0056b3' : '2px solid #ddd',
+													border: isSelected ? `2px solid ${ui.accentHover}` : `2px solid ${ui.border}`,
 													}}>
 													{!otherUser?.avatar_url && (otherUser?.username?.charAt(0).toUpperCase() || '?')}
 												</div>
@@ -643,8 +507,8 @@ const ChatPage = () => {
 															return unreadCount > 0 ? (
 																<span
 																	style={{
-																		backgroundColor: '#dc3545',
-																		color: 'white',
+																	backgroundColor: ui.danger,
+																	color: ui.dangerText,
 																		fontSize: '11px',
 																		fontWeight: 'bold',
 																		padding: '2px 6px',
@@ -681,7 +545,7 @@ const ChatPage = () => {
 							<h4
 								style={{
 									fontSize: '13px',
-									color: '#666',
+									color: ui.textMuted,
 									marginTop: '25px',
 									marginBottom: '10px',
 									textTransform: 'uppercase',
@@ -694,11 +558,11 @@ const ChatPage = () => {
 									style={{
 										padding: '20px',
 										textAlign: 'center',
-										backgroundColor: '#fff',
+										backgroundColor: ui.surface,
 										borderRadius: '8px',
-										border: '1px dashed #ddd',
+										border: `1px dashed ${ui.border}`,
 									}}>
-									<p style={{ fontSize: '12px', color: '#999', margin: 0 }}>Brak grup</p>
+									<p style={{ fontSize: '12px', color: ui.textMuted, margin: 0 }}>Brak grup</p>
 								</div>
 							) : (
 								conversations.groupConversations.map(groupMember => {
@@ -721,11 +585,11 @@ const ChatPage = () => {
 											style={{
 												padding: '12px',
 												marginBottom: '8px',
-												backgroundColor: isSelected ? '#28a745' : '#fff',
-												color: isSelected ? '#fff' : '#000',
+												backgroundColor: isSelected ? ui.success : ui.surface,
+												color: isSelected ? ui.successText : ui.textPrimary,
 												borderRadius: '8px',
 												cursor: 'pointer',
-												border: isSelected ? '2px solid #1e7e34' : '1px solid #ddd',
+												border: isSelected ? `2px solid ${ui.successSoft}` : `1px solid ${ui.border}`,
 											}}>
 											<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 												<div
@@ -733,8 +597,8 @@ const ChatPage = () => {
 														width: '35px',
 														height: '35px',
 														borderRadius: '50%',
-														backgroundColor: isSelected ? '#fff' : '#28a745',
-														color: isSelected ? '#28a745' : '#fff',
+														backgroundColor: isSelected ? ui.surface : ui.success,
+														color: isSelected ? ui.success : ui.successText,
 														display: 'flex',
 														alignItems: 'center',
 														justifyContent: 'center',
@@ -748,7 +612,7 @@ const ChatPage = () => {
 														<div
 															style={{
 																fontSize: '12px',
-																opacity: 0.8,
+																color: ui.textMuted,
 																marginTop: '3px',
 																overflow: 'hidden',
 																textOverflow: 'ellipsis',
@@ -770,7 +634,7 @@ const ChatPage = () => {
 							<h4
 								style={{
 									fontSize: '13px',
-									color: '#666',
+									color: ui.textMuted,
 									marginBottom: '10px',
 									textTransform: 'uppercase',
 									letterSpacing: '0.5px',
@@ -783,12 +647,12 @@ const ChatPage = () => {
 									style={{
 										padding: '20px',
 										textAlign: 'center',
-										backgroundColor: '#fff',
+										backgroundColor: ui.surface,
 										borderRadius: '8px',
-										border: '1px dashed #ddd',
+										border: `1px dashed ${ui.border}`,
 									}}>
-									<p style={{ fontSize: '12px', color: '#999', margin: 0 }}>Brak zarchiwizowanych konwersacji</p>
-									<p style={{ fontSize: '11px', color: '#bbb', margin: '5px 0 0 0' }}>
+									<p style={{ fontSize: '12px', color: ui.textMuted, margin: 0 }}>Brak zarchiwizowanych konwersacji</p>
+									<p style={{ fontSize: '11px', color: ui.textSecondary, margin: '5px 0 0 0' }}>
 										Archiwizuj konwersacje aby je tutaj zobaczyć
 									</p>
 								</div>
@@ -805,9 +669,10 @@ const ChatPage = () => {
 												style={{
 													padding: '12px',
 													marginBottom: '8px',
-													backgroundColor: '#fff',
+													backgroundColor: ui.surface,
 													borderRadius: '8px',
-													border: '1px solid #ddd',
+													border: `1px solid ${ui.border}`,
+													boxShadow: ui.cardShadow,
 												}}>
 												<div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 													<div
@@ -815,8 +680,8 @@ const ChatPage = () => {
 															width: '35px',
 															height: '35px',
 															borderRadius: '50%',
-															backgroundColor: '#6c757d',
-															color: '#fff',
+															backgroundColor: ui.secondary,
+															color: ui.secondaryText,
 															display: 'flex',
 															alignItems: 'center',
 															justifyContent: 'center',
@@ -826,14 +691,14 @@ const ChatPage = () => {
 														{otherUser?.username?.charAt(0).toUpperCase() || '?'}
 													</div>
 													<div style={{ flex: 1, minWidth: 0 }}>
-														<div style={{ fontWeight: 'bold', fontSize: '14px' }}>
+														<div style={{ fontWeight: 'bold', fontSize: '14px', color: ui.textPrimary }}>
 															{otherUser?.username || 'Użytkownik'}
 														</div>
 														{lastMessage && (
 															<div
 																style={{
 																	fontSize: '12px',
-																	color: '#666',
+																	color: ui.textMuted,
 																	marginTop: '3px',
 																	overflow: 'hidden',
 																	textOverflow: 'ellipsis',
@@ -842,20 +707,23 @@ const ChatPage = () => {
 																{lastMessage.content}
 															</div>
 														)}
-														<div style={{ fontSize: '11px', color: '#999', marginTop: '5px' }}>
+														<div style={{ fontSize: '11px', color: ui.textMuted, marginTop: '5px' }}>
 															Zarchiwizowano: {new Date(conv.archived_at).toLocaleDateString('pl-PL')}
 														</div>
 													</div>
 													<button
 														onClick={() => handleUnarchive(conv.conversation_id)}
+														onMouseEnter={e => (e.currentTarget.style.backgroundColor = ui.successHover)}
+														onMouseLeave={e => (e.currentTarget.style.backgroundColor = ui.success)}
 														style={{
 															padding: '6px 12px',
-															backgroundColor: '#28a745',
-															color: 'white',
+															backgroundColor: ui.success,
+															color: ui.successText,
 															border: 'none',
 															borderRadius: '5px',
 															cursor: 'pointer',
 															fontSize: '12px',
+															transition: 'background-color 0.2s ease',
 														}}>
 														Przywróć
 													</button>
@@ -872,44 +740,45 @@ const ChatPage = () => {
 				<div
 					style={{
 						padding: '15px',
-						borderTop: '2px solid #ddd',
-						backgroundColor: '#fff',
+						borderTop: `1px solid ${ui.border}`,
+						backgroundColor: ui.surface,
+						boxShadow: ui.cardShadow,
 					}}>
 					<button
 						onClick={() => navigate('/contacts')}
+						onMouseEnter={e => (e.currentTarget.style.backgroundColor = ui.accentHover)}
+						onMouseLeave={e => (e.currentTarget.style.backgroundColor = ui.accent)}
 						style={{
 							width: '100%',
 							padding: '12px',
 							marginBottom: '8px',
-							backgroundColor: '#007bff',
-							color: 'white',
+							backgroundColor: ui.accent,
+							color: ui.accentText,
 							border: 'none',
 							borderRadius: '8px',
 							cursor: 'pointer',
 							fontWeight: 'bold',
 							fontSize: '14px',
 							transition: 'background-color 0.2s',
-						}}
-						onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0056b3')}
-						onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#007bff')}>
+						}}>
 						👥 Zarządzaj Znajomymi
 					</button>
 					<button
 						onClick={() => navigate('/groups')}
+						onMouseEnter={e => (e.currentTarget.style.backgroundColor = ui.successHover)}
+						onMouseLeave={e => (e.currentTarget.style.backgroundColor = ui.success)}
 						style={{
 							width: '100%',
 							padding: '12px',
-							backgroundColor: '#28a745',
-							color: 'white',
+							backgroundColor: ui.success,
+							color: ui.successText,
 							border: 'none',
 							borderRadius: '8px',
 							cursor: 'pointer',
 							fontWeight: 'bold',
 							fontSize: '14px',
 							transition: 'background-color 0.2s',
-						}}
-						onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#1e7e34')}
-						onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#28a745')}>
+						}}>
 						🎯 Zarządzaj Grupami
 					</button>
 				</div>
@@ -926,29 +795,30 @@ const ChatPage = () => {
 							justifyContent: 'center',
 							alignItems: 'center',
 							height: '100%',
-							color: '#999',
-							backgroundColor: '#fafafa',
+							color: ui.textMuted,
+							backgroundColor: ui.bg,
 						}}>
 						<div style={{ textAlign: 'center', maxWidth: '400px', padding: '20px' }}>
 							<div style={{ fontSize: '64px', marginBottom: '20px' }}>💬</div>
-							<h2 style={{ color: '#333', marginBottom: '10px' }}>Wybierz konwersację</h2>
-							<p style={{ color: '#666', marginBottom: '30px' }}>
+							<h2 style={{ color: ui.textPrimary, marginBottom: '10px' }}>Wybierz konwersację</h2>
+							<p style={{ color: ui.textSecondary, marginBottom: '30px' }}>
 								Kliknij na konwersację po lewej stronie aby rozpocząć czat
 							</p>
 							<div
 								style={{
 									padding: '20px',
-									backgroundColor: '#fff',
+									backgroundColor: ui.surface,
 									borderRadius: '10px',
-									border: '1px solid #e0e0e0',
+									border: `1px solid ${ui.border}`,
+									boxShadow: ui.cardShadow,
 								}}>
-								<p style={{ fontSize: '14px', color: '#666', margin: '0 0 15px 0' }}>
+								<p style={{ fontSize: '14px', color: ui.textSecondary, margin: '0 0 15px 0' }}>
 									<strong>Pierwsze kroki:</strong>
 								</p>
-								<p style={{ fontSize: '13px', color: '#888', margin: '5px 0' }}>1. Kliknij "👥 Zarządzaj Znajomymi"</p>
-								<p style={{ fontSize: '13px', color: '#888', margin: '5px 0' }}>2. Wygeneruj kod zaproszeniowy</p>
-								<p style={{ fontSize: '13px', color: '#888', margin: '5px 0' }}>3. Podziel się kodem z innymi</p>
-								<p style={{ fontSize: '13px', color: '#888', margin: '5px 0' }}>4. Zaakceptuj zaproszenia</p>
+								<p style={{ fontSize: '13px', color: ui.textMuted, margin: '5px 0' }}>1. Kliknij "👥 Zarządzaj Znajomymi"</p>
+								<p style={{ fontSize: '13px', color: ui.textMuted, margin: '5px 0' }}>2. Wygeneruj kod zaproszeniowy</p>
+								<p style={{ fontSize: '13px', color: ui.textMuted, margin: '5px 0' }}>3. Podziel się kodem z innymi</p>
+								<p style={{ fontSize: '13px', color: ui.textMuted, margin: '5px 0' }}>4. Zaakceptuj zaproszenia</p>
 							</div>
 						</div>
 					</div>

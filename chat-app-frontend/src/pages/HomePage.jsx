@@ -1,6 +1,18 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
+const palette = {
+	background: 'var(--color-bg)',
+	surface: 'var(--card-bg)',
+	textPrimary: 'var(--color-text-primary)',
+	textMuted: 'var(--color-text-muted)',
+	accent: 'var(--color-accent)',
+	accentText: 'var(--color-accent-contrast)',
+	success: 'var(--button-success-bg)',
+	successText: 'var(--button-success-text)',
+	border: 'var(--color-border)'
+}
+
 const HomePage = () => {
 	const navigate = useNavigate()
 	const { isAuthenticated } = useAuth()
@@ -17,9 +29,15 @@ const HomePage = () => {
 				maxWidth: '800px',
 				margin: '0 auto',
 				textAlign: 'center',
-			}}>
+				backgroundColor: palette.surface,
+				borderRadius: '16px',
+				boxShadow: 'var(--shadow-md)',
+				border: `1px solid ${palette.border}`,
+				color: palette.textPrimary,
+			}}
+		>
 			<h1 style={{ fontSize: '48px', marginBottom: '20px' }}>💬 Chat App</h1>
-			<p style={{ fontSize: '20px', color: '#666', marginBottom: '40px' }}>
+			<p style={{ fontSize: '20px', color: palette.textMuted, marginBottom: '40px' }}>
 				Bezpieczna, anonimowa aplikacja do komunikacji w czasie rzeczywistym
 			</p>
 
@@ -29,11 +47,12 @@ const HomePage = () => {
 					style={{
 						padding: '15px 40px',
 						fontSize: '18px',
-						backgroundColor: '#007bff',
-						color: 'white',
+						backgroundColor: palette.accent,
+						color: palette.accentText,
 						border: 'none',
 						borderRadius: '8px',
 						cursor: 'pointer',
+						boxShadow: 'var(--shadow-sm)',
 					}}>
 					Zaloguj się
 				</button>
@@ -43,11 +62,12 @@ const HomePage = () => {
 					style={{
 						padding: '15px 40px',
 						fontSize: '18px',
-						backgroundColor: '#28a745',
-						color: 'white',
+						backgroundColor: palette.success,
+						color: palette.successText,
 						border: 'none',
 						borderRadius: '8px',
 						cursor: 'pointer',
+						boxShadow: 'var(--shadow-sm)',
 					}}>
 					Zarejestruj się
 				</button>

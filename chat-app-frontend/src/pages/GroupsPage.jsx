@@ -29,6 +29,33 @@ const GroupsPage = () => {
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
 
+	const palette = {
+		accent: 'var(--color-accent)',
+		accentText: 'var(--color-accent-contrast)',
+		surface: 'var(--color-surface)',
+		surfaceMuted: 'var(--card-bg)',
+		border: 'var(--color-border)',
+		textPrimary: 'var(--color-text-primary)',
+		textSecondary: 'var(--color-text-secondary)',
+		textMuted: 'var(--color-text-muted)',
+		success: 'var(--button-success-bg)',
+		successText: 'var(--button-success-text)',
+		successBorder: 'var(--alert-success-border)',
+		successBg: 'var(--alert-success-bg)',
+		successToneText: 'var(--alert-success-text)',
+		danger: 'var(--button-danger-bg)',
+		dangerText: 'var(--button-danger-text)',
+		dangerBorder: 'var(--alert-danger-border)',
+		warning: 'var(--color-warning)',
+		warningBg: 'var(--alert-warning-bg)',
+		warningText: 'var(--alert-warning-text)',
+		warningBorder: 'var(--alert-warning-border)',
+		info: 'var(--color-info)',
+		infoText: 'var(--color-info-contrast)',
+		secondary: 'var(--color-secondary)',
+		secondaryText: 'var(--color-secondary-contrast)'
+	}
+
 	useEffect(() => {
 		loadGroups()
 	}, [])
@@ -519,27 +546,32 @@ const GroupsPage = () => {
 	}
 
 	if (loading) {
-		return <div style={{ padding: '20px' }}>Ładowanie...</div>
+		return (
+			<div style={{ padding: '20px', color: palette.textMuted }}>
+				Ładowanie...
+			</div>
+		)
 	}
 
 	return (
-		<div style={{ display: 'flex', height: '100vh' }}>
+		<div style={{ display: 'flex', height: '100vh', backgroundColor: 'var(--color-bg)', color: palette.textPrimary }}>
 			{/* Sidebar - Lista grup */}
 			<div
 				style={{
 					width: '300px',
-					borderRight: '1px solid #ddd',
-					backgroundColor: '#f8f9fa',
+					borderRight: `1px solid ${palette.border}`,
+					backgroundColor: palette.surfaceMuted,
 					overflowY: 'auto',
 					padding: '20px',
+					boxShadow: 'var(--shadow-sm)',
 				}}>
 				<button
 					onClick={() => navigate('/chat')}
 					style={{
 						width: '100%',
 						padding: '10px',
-						backgroundColor: '#6c757d',
-						color: 'white',
+						backgroundColor: palette.secondary,
+						color: palette.secondaryText,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -549,15 +581,15 @@ const GroupsPage = () => {
 				</button>
 
 				<h2>🎯 Grupy</h2>
-				<p style={{ fontSize: '12px', color: '#666', marginBottom: '20px' }}>{user?.username}</p>
+				<p style={{ fontSize: '12px', color: palette.textMuted, marginBottom: '20px' }}>{user?.username}</p>
 
 				<button
 					onClick={() => setShowCreateGroup(!showCreateGroup)}
 					style={{
 						width: '100%',
 						padding: '12px',
-						backgroundColor: '#28a745',
-						color: 'white',
+						backgroundColor: palette.success,
+						color: palette.successText,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -572,8 +604,8 @@ const GroupsPage = () => {
 					style={{
 						width: '100%',
 						padding: '12px',
-						backgroundColor: '#007bff',
-						color: 'white',
+						backgroundColor: palette.accent,
+						color: palette.accentText,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -595,8 +627,10 @@ const GroupsPage = () => {
 								width: '100%',
 								padding: '10px',
 								borderRadius: '5px',
-								border: '1px solid #ddd',
+								border: `1px solid ${palette.border}`,
 								marginBottom: '10px',
+								backgroundColor: palette.surface,
+								color: palette.textPrimary,
 							}}
 							required
 						/>
@@ -605,8 +639,8 @@ const GroupsPage = () => {
 							style={{
 								width: '100%',
 								padding: '10px',
-								backgroundColor: '#28a745',
-								color: 'white',
+								backgroundColor: palette.success,
+								color: palette.successText,
 								border: 'none',
 								borderRadius: '5px',
 								cursor: 'pointer',
@@ -629,11 +663,13 @@ const GroupsPage = () => {
 								width: '100%',
 								padding: '10px',
 								borderRadius: '5px',
-								border: '1px solid #ddd',
+								border: `1px solid ${palette.border}`,
 								marginBottom: '10px',
 								textAlign: 'center',
 								fontFamily: 'monospace',
 								letterSpacing: '3px',
+								backgroundColor: palette.surface,
+								color: palette.textPrimary,
 							}}
 							required
 						/>
@@ -642,8 +678,8 @@ const GroupsPage = () => {
 							style={{
 								width: '100%',
 								padding: '10px',
-								backgroundColor: '#007bff',
-								color: 'white',
+								backgroundColor: palette.accent,
+								color: palette.accentText,
 								border: 'none',
 								borderRadius: '5px',
 								cursor: 'pointer',
@@ -656,12 +692,13 @@ const GroupsPage = () => {
 				{error && (
 					<div
 						style={{
-							backgroundColor: '#f8d7da',
-							color: '#721c24',
+							backgroundColor: palette.dangerBg,
+							color: palette.dangerText,
 							padding: '10px',
 							borderRadius: '5px',
 							marginBottom: '15px',
 							fontSize: '12px',
+							border: `1px solid ${palette.dangerBorder}`,
 						}}>
 						{error}
 					</div>
@@ -669,25 +706,28 @@ const GroupsPage = () => {
 
 				<h3 style={{ fontSize: '16px', marginBottom: '10px' }}>Twoje Grupy</h3>
 				{groups.length === 0 ? (
-					<p style={{ fontSize: '12px', color: '#999' }}>Brak grup</p>
+					<p style={{ fontSize: '12px', color: palette.textMuted }}>Brak grup</p>
 				) : (
 					groups.map(groupMember => {
 						const group = groupMember.group
+						const isSelected = selectedGroup?.group_id === group.group_id
 						return (
 							<div
 								key={group.group_id}
 								onClick={() => setSelectedGroup(group)}
 								style={{
 									padding: '12px',
-									backgroundColor: selectedGroup?.group_id === group.group_id ? '#007bff' : '#fff',
-									color: selectedGroup?.group_id === group.group_id ? '#fff' : '#000',
+									backgroundColor: isSelected ? palette.accent : palette.surface,
+									color: isSelected ? palette.accentText : palette.textPrimary,
 									borderRadius: '5px',
 									cursor: 'pointer',
 									marginBottom: '8px',
-									border: '1px solid #ddd',
-								}}>
+									border: `1px solid ${palette.border}`,
+									boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
+								}}
+							>
 								<strong>{group.group_name}</strong>
-								<div style={{ fontSize: '11px', opacity: 0.8, marginTop: '5px' }}>
+								<div style={{ fontSize: '11px', color: isSelected ? palette.accentText : palette.textMuted, marginTop: '5px' }}>
 									{groupMember.role === 'creator' ? '👑 Twórca' : '👤 Członek'}
 								</div>
 							</div>
@@ -697,12 +737,21 @@ const GroupsPage = () => {
 			</div>
 
 			{/* Szczegóły grupy */}
-			<div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+			<div
+				style={{
+					flex: 1,
+					padding: '20px',
+					overflowY: 'auto',
+					backgroundColor: palette.surface,
+					borderTopRightRadius: '16px',
+					borderBottomRightRadius: '16px',
+					boxShadow: 'var(--shadow-md)'
+				}}>
 				{selectedGroup ? (
 					<>
 						{/* <h2>{selectedGroup.group_name}</h2> */}
 						{editingGroupName ? (
-							<div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+							<div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
 								<input
 									type="text"
 									value={newGroupName}
@@ -712,8 +761,10 @@ const GroupsPage = () => {
 										flex: 1,
 										padding: '10px',
 										borderRadius: '5px',
-										border: '1px solid #ddd',
+										border: `1px solid ${palette.border}`,
 										fontSize: '16px',
+										backgroundColor: palette.surface,
+										color: palette.textPrimary,
 									}}
 									autoFocus
 								/>
@@ -727,8 +778,8 @@ const GroupsPage = () => {
 									}}
 									style={{
 										padding: '10px 20px',
-										backgroundColor: '#28a745',
-										color: 'white',
+										backgroundColor: palette.success,
+										color: palette.successText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
@@ -742,8 +793,8 @@ const GroupsPage = () => {
 									}}
 									style={{
 										padding: '10px 20px',
-										backgroundColor: '#6c757d',
-										color: 'white',
+										backgroundColor: palette.secondary,
+										color: palette.secondaryText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
@@ -752,7 +803,7 @@ const GroupsPage = () => {
 								</button>
 							</div>
 						) : (
-							<div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
 								<h2 style={{ margin: 0 }}>{selectedGroup.group_name}</h2>
 								{isGroupCreator(selectedGroup.group_id) && (
 									<button
@@ -762,8 +813,8 @@ const GroupsPage = () => {
 										}}
 										style={{
 											padding: '6px 12px',
-											backgroundColor: '#17a2b8',
-											color: 'white',
+											backgroundColor: palette.info,
+											color: palette.infoText,
 											border: 'none',
 											borderRadius: '5px',
 											cursor: 'pointer',
@@ -779,26 +830,28 @@ const GroupsPage = () => {
 						{showGeneratedCode && generatedCode && (
 							<div
 								style={{
-									backgroundColor: '#d4edda',
-									border: '2px solid #28a745',
+									backgroundColor: palette.successBg,
+									border: `2px solid ${palette.successBorder}`,
 									padding: '15px',
 									borderRadius: '8px',
 									marginBottom: '20px',
-								}}>
-								<h4>Kod Zaproszeniowy:</h4>
-								<div
-									style={{
-										fontSize: '24px',
-										fontWeight: 'bold',
-										fontFamily: 'monospace',
-										letterSpacing: '5px',
-										margin: '10px 0',
-									}}>
-									{generatedCode}
-								</div>
-								<p style={{ fontSize: '12px' }}>Ważny przez 60 sekund!</p>
+									color: palette.successToneText,
+						}}>
+							<h4>Kod Zaproszeniowy:</h4>
+							<div
+								style={{
+									fontSize: '24px',
+									fontWeight: 'bold',
+									fontFamily: 'monospace',
+									letterSpacing: '5px',
+									margin: '10px 0',
+								}}
+							>
+								{generatedCode}
 							</div>
-						)}
+							<p style={{ fontSize: '12px', color: palette.textMuted }}>Ważny przez 60 sekund!</p>
+						</div>
+					)}
 
 						{/* Akcje twórcy */}
 						{groups.find(g => g.group_id === selectedGroup.group_id)?.role === 'creator' && (
@@ -807,28 +860,28 @@ const GroupsPage = () => {
 									onClick={() => handleGenerateInvite(selectedGroup.group_id)}
 									style={{
 										padding: '10px 15px',
-										backgroundColor: '#28a745',
-										color: 'white',
+										backgroundColor: palette.success,
+										color: palette.successText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
-									}}>
-									🔑 Generuj Kod
-								</button>
-								<button
-									onClick={() => handleDeleteGroup(selectedGroup.group_id)}
-									style={{
-										padding: '10px 15px',
-										backgroundColor: '#dc3545',
-										color: 'white',
-										border: 'none',
-										borderRadius: '5px',
-										cursor: 'pointer',
-									}}>
-									🗑️ Usuń Grupę
-								</button>
-							</div>
-						)}
+							}}>
+								🔑 Generuj Kod
+							</button>
+							<button
+								onClick={() => handleDeleteGroup(selectedGroup.group_id)}
+								style={{
+									padding: '10px 15px',
+									backgroundColor: palette.danger,
+									color: palette.dangerText,
+									border: 'none',
+									borderRadius: '5px',
+									cursor: 'pointer',
+							}}>
+								🗑️ Usuń Grupę
+							</button>
+						</div>
+					)}
 
 						{/* Akcje członka */}
 						{groups.find(g => g.group_id === selectedGroup.group_id)?.role === 'member' && (
@@ -836,16 +889,16 @@ const GroupsPage = () => {
 								onClick={() => handleLeaveGroup(selectedGroup.group_id)}
 								style={{
 									padding: '10px 15px',
-									backgroundColor: '#ffc107',
-									color: '#000',
+									backgroundColor: palette.warning,
+									color: palette.textPrimary,
 									border: 'none',
 									borderRadius: '5px',
 									cursor: 'pointer',
 									marginBottom: '20px',
-								}}>
-								🚪 Opuść Grupę
-							</button>
-						)}
+						}}>
+							🚪 Opuść Grupę
+						</button>
+					)}
 
 						{/* Oczekujące prośby (tylko twórca) */}
 						{pendingRequests.length > 0 &&
@@ -856,38 +909,42 @@ const GroupsPage = () => {
 										<div
 											key={request.member_id}
 											style={{
-												backgroundColor: '#fff3cd',
+												backgroundColor: palette.warningBg,
 												padding: '15px',
 												borderRadius: '8px',
 												marginTop: '10px',
 												display: 'flex',
 												justifyContent: 'space-between',
 												alignItems: 'center',
-											}}>
+												border: `1px solid ${palette.warningBorder}`,
+											}}
+										>
 											<strong>{request.user?.username}</strong>
 											<div style={{ display: 'flex', gap: '10px' }}>
 												<button
 													onClick={() => handleAcceptMember(selectedGroup.group_id, request.user_id)}
 													style={{
 														padding: '8px 15px',
-														backgroundColor: '#28a745',
-														color: 'white',
+														backgroundColor: palette.success,
+														color: palette.successText,
 														border: 'none',
 														borderRadius: '5px',
 														cursor: 'pointer',
-													}}>
+													}}
+												>
 													✅ Akceptuj
 												</button>
 												<button
 													onClick={() => handleRejectMember(selectedGroup.group_id, request.user_id)}
 													style={{
 														padding: '8px 15px',
-														backgroundColor: '#dc3545',
-														color: 'white',
+														backgroundColor: palette.danger,
+														color: palette.dangerText,
 														border: 'none',
 														borderRadius: '5px',
 														cursor: 'pointer',
-													}}>
+													}}
+												>
 													❌ Odrzuć
 												</button>
 											</div>
@@ -903,18 +960,19 @@ const GroupsPage = () => {
 								<div
 									key={member.member_id}
 									style={{
-										backgroundColor: '#fff',
+										backgroundColor: palette.surface,
 										padding: '15px',
 										borderRadius: '8px',
 										marginTop: '10px',
 										display: 'flex',
 										justifyContent: 'space-between',
 										alignItems: 'center',
-										border: '1px solid #ddd',
-									}}>
+										border: `1px solid ${palette.border}`,
+									}}
+								>
 									<div>
 										<strong>{member.user?.username}</strong>
-										<div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+										<div style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>
 											{member.role === 'creator' ? '👑 Twórca' : '👤 Członek'}
 										</div>
 									</div>
@@ -924,12 +982,13 @@ const GroupsPage = () => {
 												onClick={() => handleRemoveMember(selectedGroup.group_id, member.user_id)}
 												style={{
 													padding: '8px 15px',
-													backgroundColor: '#dc3545',
-													color: 'white',
+													backgroundColor: palette.danger,
+													color: palette.dangerText,
 													border: 'none',
 													borderRadius: '5px',
 													cursor: 'pointer',
-												}}>
+												}}
+											>
 												Usuń
 											</button>
 										)}
@@ -944,7 +1003,7 @@ const GroupsPage = () => {
 							justifyContent: 'center',
 							alignItems: 'center',
 							height: '100%',
-							color: '#999',
+							color: palette.textMuted,
 						}}>
 						<p>Wybierz grupę aby zobaczyć szczegóły</p>
 					</div>

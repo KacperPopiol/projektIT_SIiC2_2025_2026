@@ -14,24 +14,27 @@ const backdropStyle = {
 	padding: '30px',
 }
 
-const modalStyle = {
-	backgroundColor: '#ffffff',
-	borderRadius: '14px',
+const modalStyles = {
 	width: '100%',
 	maxWidth: '620px',
-	maxHeight: '85vh',
+    maxHeight: '85vh',
+	maxHeight: '80vh',
+	borderRadius: '16px',
+	backgroundColor: 'var(--card-bg)',
+	boxShadow: 'var(--shadow-md)',
+	overflowY: 'hidden',
 	display: 'flex',
 	flexDirection: 'column',
-	boxShadow: '0 18px 45px rgba(0,0,0,0.2)',
-	overflow: 'hidden',
+	border: `1px solid var(--color-border)`
 }
 
-const headerStyle = {
-	padding: '20px 24px',
-	borderBottom: '1px solid #f0f0f0',
+const headerStyles = {
 	display: 'flex',
 	alignItems: 'center',
 	justifyContent: 'space-between',
+	padding: '20px 24px',
+	borderBottom: '1px solid var(--color-border)',
+	backgroundColor: 'var(--color-surface)'
 }
 
 const gridStyle = {
@@ -60,11 +63,11 @@ const ThemePickerModal = ({
 
 	return (
 		<div style={backdropStyle} onClick={onClose}>
-			<div style={modalStyle} onClick={e => e.stopPropagation()}>
-				<div style={headerStyle}>
+			<div style={modalStyles} onClick={e => e.stopPropagation()}>
+				<div style={headerStyles}>
 					<div>
 						<h2 style={{ margin: 0 }}>Wybierz motyw rozmowy</h2>
-						<p style={{ margin: '6px 0 0 0', color: '#6c757d', fontSize: '14px' }}>
+						<p style={{ margin: '6px 0 0 0', color: 'var(--color-text-muted)', fontSize: '14px' }}>
 							Motyw zostanie ustawiony dla wszystkich uczestników konwersacji.
 						</p>
 					</div>
@@ -75,7 +78,7 @@ const ThemePickerModal = ({
 							border: 'none',
 							fontSize: '20px',
 							cursor: 'pointer',
-							color: '#6c757d',
+							color: 'var(--color-text-muted)',
 						}}
 						disabled={isSaving}>
 						×
@@ -91,10 +94,11 @@ const ThemePickerModal = ({
 								onClick={() => onSelect(theme)}
 								disabled={isSaving}
 								style={{
-									border: isActive ? '2px solid #007bff' : '1px solid #e5e7eb',
+									border: isActive ? `2px solid var(--color-accent)` : `1px solid var(--color-border)`,
 									borderRadius: '12px',
 									padding: '16px',
-									backgroundColor: '#ffffff',
+									backgroundColor: 'var(--color-surface)',
+									color: 'var(--color-text-primary)',
 									cursor: isSaving ? 'not-allowed' : 'pointer',
 									textAlign: 'left',
 									boxShadow: isActive ? '0 10px 24px rgba(0,123,255,0.25)' : '0 4px 12px rgba(0,0,0,0.06)',
@@ -173,16 +177,15 @@ const ThemePickerModal = ({
 								<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 									<div>
 										<strong style={{ display: 'block', fontSize: '14px' }}>{theme.name}</strong>
-										<span style={{ fontSize: '12px', color: '#6c757d' }}>#{theme.key}</span>
+										<span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>#{theme.key}</span>
 									</div>
 									{isActive && (
 										<span
 											style={{
-												backgroundColor: '#007bff',
-												color: '#ffffff',
-												fontSize: '11px',
-												padding: '4px 8px',
+												padding: '4px 10px',
 												borderRadius: '999px',
+												backgroundColor: 'var(--color-accent)',
+												color: 'var(--color-accent-contrast)',
 											}}>
 											Aktywny
 										</span>
@@ -196,11 +199,11 @@ const ThemePickerModal = ({
 				<div
 					style={{
 						padding: '14px 24px',
-						borderTop: '1px solid #f0f0f0',
+						borderTop: '1px solid var(--color-border)',
 						display: 'flex',
 						justifyContent: 'flex-end',
 						gap: '12px',
-						backgroundColor: '#fafafa',
+						backgroundColor: 'var(--color-elevated)',
 					}}>
 					<button
 						onClick={onClose}
@@ -208,8 +211,9 @@ const ThemePickerModal = ({
 						style={{
 							padding: '10px 18px',
 							borderRadius: '8px',
-							border: '1px solid #ced4da',
-							backgroundColor: '#ffffff',
+							color: 'var(--color-text-primary)',
+							border: '1px solid var(--color-border)',
+							backgroundColor: 'var(--color-surface)',
 							cursor: isSaving ? 'not-allowed' : 'pointer',
 						}}>
 						Anuluj

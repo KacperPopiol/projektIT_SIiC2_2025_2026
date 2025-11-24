@@ -63,4 +63,17 @@ export const storage = {
 	removeNotificationSettings: () => {
 		localStorage.removeItem('notificationSettings')
 	},
+
+	// Theme preference
+	setThemePreference: theme => {
+		localStorage.setItem('themePreference', theme)
+	},
+
+	getThemePreference: () => {
+		return localStorage.getItem('themePreference')
+	},
+
+	removeThemePreference: () => {
+		localStorage.removeItem('themePreference')
+	},
 }

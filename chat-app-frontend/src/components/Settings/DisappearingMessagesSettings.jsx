@@ -6,6 +6,16 @@ const DisappearingMessagesSettings = () => {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
 
+    const palette = {
+        surface: 'var(--card-bg)',
+        surfaceBase: 'var(--color-surface)',
+        border: 'var(--color-border)',
+        textPrimary: 'var(--color-text-primary)',
+        textMuted: 'var(--color-text-muted)',
+        inputBg: 'var(--color-surface)',
+        inputDisabledBg: 'var(--scrollbar-track)'
+    }
+
     useEffect(() => {
         loadSettings()
     }, [])
@@ -57,16 +67,16 @@ const DisappearingMessagesSettings = () => {
 
     if (loading) {
         return (
-            <div style={{ background: 'white', padding: '20px', borderRadius: '10px', border: '1px solid #eee' }}>
+            <div style={{ background: palette.surface, padding: '20px', borderRadius: '10px', border: `1px solid ${palette.border}`, color: palette.textPrimary }}>
                 <p>Ładowanie...</p>
             </div>
         )
     }
 
     return (
-        <div style={{ background: 'white', padding: '20px', borderRadius: '10px', border: '1px solid #eee' }}>
+        <div style={{ background: palette.surface, padding: '20px', borderRadius: '10px', border: `1px solid ${palette.border}`, color: palette.textPrimary }}>
             <h3 style={{ marginTop: 0 }}>⏱️ Znikające wiadomości</h3>
-            <p style={{ fontSize: '14px', color: '#666', marginBottom: '15px' }}>
+            <p style={{ fontSize: '14px', color: palette.textMuted, marginBottom: '15px' }}>
                 Domyślny czas po którym wiadomości znikają po przeczytaniu. Ustawienie dotyczy wszystkich nowych chatów z włączonym trybem znikających wiadomości.
             </p>
 
@@ -77,6 +87,7 @@ const DisappearingMessagesSettings = () => {
                         marginBottom: '8px',
                         fontSize: '14px',
                         fontWeight: '500',
+                        color: palette.textPrimary,
                     }}>
                     Czas znikania:
                 </label>
@@ -88,9 +99,10 @@ const DisappearingMessagesSettings = () => {
                         width: '100%',
                         padding: '10px',
                         borderRadius: '5px',
-                        border: '1px solid #ddd',
+                        border: `1px solid ${palette.border}`,
                         fontSize: '14px',
-                        backgroundColor: saving ? '#f5f5f5' : 'white',
+                        backgroundColor: saving ? palette.inputDisabledBg : palette.inputBg,
+                        color: palette.textPrimary,
                         cursor: saving ? 'not-allowed' : 'pointer',
                     }}>
                     <option value={30}>30 sekund</option>
@@ -102,11 +114,11 @@ const DisappearingMessagesSettings = () => {
             </div>
 
             {saving && (
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Zapisywanie...</div>
+                <div style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>Zapisywanie...</div>
             )}
 
             {!saving && (
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+                <div style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>
                     Aktualnie ustawione: <strong>{formatTime(defaultTime)}</strong>
                 </div>
             )}

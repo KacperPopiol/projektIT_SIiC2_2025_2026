@@ -23,6 +23,31 @@ const ContactsPage = () => {
 	const [searchQuery, setSearchQuery] = useState('')
 	const [searchResults, setSearchResults] = useState([])
 	const [searching, setSearching] = useState(false)
+
+	const palette = {
+		accent: 'var(--color-accent)',
+		accentText: 'var(--color-accent-contrast)',
+		surface: 'var(--color-surface)',
+		surfaceMuted: 'var(--card-bg)',
+		border: 'var(--color-border)',
+		textPrimary: 'var(--color-text-primary)',
+		textSecondary: 'var(--color-text-secondary)',
+		textMuted: 'var(--color-text-muted)',
+		success: 'var(--button-success-bg)',
+		successText: 'var(--button-success-text)',
+		successBorder: 'var(--alert-success-border)',
+		danger: 'var(--button-danger-bg)',
+		dangerText: 'var(--button-danger-text)',
+		dangerBorder: 'var(--alert-danger-border)',
+		warningBg: 'var(--alert-warning-bg)',
+		warningText: 'var(--alert-warning-text)',
+		warningBorder: 'var(--alert-warning-border)',
+		dangerBg: 'var(--alert-danger-bg)',
+		dangerTextStrong: 'var(--alert-danger-text)',
+		secondary: 'var(--color-secondary)',
+		secondaryContrast: 'var(--color-secondary-contrast)'
+	}
+
 	useEffect(() => {
 		loadContacts()
 	}, [])
@@ -132,19 +157,23 @@ const ContactsPage = () => {
 		}
 	}
 	if (loading) {
-		return <div style={{ padding: '20px' }}>Ładowanie...</div>
+		return (
+			<div style={{ padding: '40px', textAlign: 'center', color: palette.textMuted, backgroundColor: 'var(--color-bg)' }}>
+				Ładowanie...
+			</div>
+		)
 	}
 
 	return (
-		<div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+		<div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', color: palette.textPrimary, backgroundColor: 'var(--color-bg)' }}>
 			{/* Header */}
 			<div style={{ marginBottom: '30px' }}>
 				<button
 					onClick={() => navigate('/chat')}
 					style={{
 						padding: '8px 15px',
-						backgroundColor: '#6c757d',
-						color: 'white',
+						backgroundColor: palette.secondary,
+						color: palette.secondaryContrast,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -153,7 +182,7 @@ const ContactsPage = () => {
 					← Wróć do Czatu
 				</button>
 				<h1>👥 Znajomi</h1>
-				<p style={{ color: '#666', marginTop: '5px' }}>
+				<p style={{ color: palette.textMuted, marginTop: '5px' }}>
 					Zalogowany jako: <strong>{user?.username}</strong>
 				</p>
 			</div>
@@ -161,8 +190,8 @@ const ContactsPage = () => {
 			{error && (
 				<div
 					style={{
-						backgroundColor: '#f8d7da',
-						color: '#721c24',
+						backgroundColor: palette.dangerBg,
+						color: palette.dangerTextStrong,
 						padding: '10px',
 						borderRadius: '5px',
 						marginBottom: '20px',
@@ -183,12 +212,14 @@ const ContactsPage = () => {
 						width: '100%',
 						padding: '12px',
 						borderRadius: '8px',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 						fontSize: '14px',
+						backgroundColor: palette.surface,
+						color: palette.textPrimary,
 					}}
 				/>
 
-				{searching && <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>Wyszukiwanie...</p>}
+				{searching && <p style={{ fontSize: '12px', color: palette.textMuted, marginTop: '10px' }}>Wyszukiwanie...</p>}
 
 				{searchResults.length > 0 && (
 					<div style={{ marginTop: '15px' }}>
@@ -197,18 +228,18 @@ const ContactsPage = () => {
 							<div
 								key={contact.contact_id}
 								style={{
-									backgroundColor: '#fff',
+									backgroundColor: palette.surface,
 									padding: '12px',
 									borderRadius: '8px',
 									marginBottom: '8px',
-									border: '1px solid #ddd',
+									border: `1px solid ${palette.border}`,
 									display: 'flex',
 									justifyContent: 'space-between',
 									alignItems: 'center',
 								}}>
 								<div>
 									<strong>{contact.contactUser?.username}</strong>
-									<div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
+									<div style={{ fontSize: '12px', color: palette.textMuted, marginTop: '3px' }}>
 										Status: {contact.status === 'accepted' ? '✅ Znajomy' : '⏳ Oczekuje'}
 									</div>
 								</div>
@@ -218,7 +249,7 @@ const ContactsPage = () => {
 				)}
 
 				{searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
-					<p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>
+					<p style={{ fontSize: '12px', color: palette.textMuted, marginTop: '10px' }}>
 						Nie znaleziono użytkownika "{searchQuery}"
 					</p>
 				)}
@@ -236,8 +267,8 @@ const ContactsPage = () => {
 					onClick={handleGenerateCode}
 					style={{
 						padding: '12px 20px',
-						backgroundColor: '#28a745',
-						color: 'white',
+						backgroundColor: palette.success,
+						color: palette.successText,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -250,8 +281,8 @@ const ContactsPage = () => {
 					onClick={() => setShowAddContact(!showAddContact)}
 					style={{
 						padding: '12px 20px',
-						backgroundColor: '#007bff',
-						color: 'white',
+						backgroundColor: palette.accent,
+						color: palette.accentText,
 						border: 'none',
 						borderRadius: '5px',
 						cursor: 'pointer',
@@ -265,11 +296,12 @@ const ContactsPage = () => {
 			{showGenerateCode && generatedCode && (
 				<div
 					style={{
-						backgroundColor: '#d4edda',
-						border: '2px solid #28a745',
+						backgroundColor: palette.successBg,
+						border: `2px solid ${palette.successBorder}`,
 						padding: '20px',
 						borderRadius: '8px',
 						marginBottom: '20px',
+						color: palette.successText
 					}}>
 					<h3>🔑 Twój Kod Zaproszeniowy:</h3>
 					<div
@@ -279,14 +311,14 @@ const ContactsPage = () => {
 							fontFamily: 'monospace',
 							letterSpacing: '5px',
 							margin: '15px 0',
-							color: '#28a745',
+							color: palette.success,
 						}}>
 						{generatedCode}
 					</div>
-					<p style={{ fontSize: '14px', color: '#666' }}>
+					<p style={{ fontSize: '14px', color: palette.textMuted }}>
 						⏱️ Kod wygasa za: {Math.max(0, Math.floor((codeExpiry - new Date()) / 1000))} sekund
 					</p>
-					<p style={{ fontSize: '12px', color: '#856404', marginTop: '10px' }}>
+					<p style={{ fontSize: '12px', color: palette.warningText, marginTop: '10px' }}>
 						Podaj ten kod osobie, którą chcesz dodać do znajomych. Kod jest ważny przez 60 sekund!
 					</p>
 				</div>
@@ -296,11 +328,11 @@ const ContactsPage = () => {
 			{showAddContact && (
 				<div
 					style={{
-						backgroundColor: '#f8f9fa',
+						backgroundColor: palette.surfaceMuted,
 						padding: '20px',
 						borderRadius: '8px',
 						marginBottom: '20px',
-						border: '1px solid #ddd',
+						border: `1px solid ${palette.border}`,
 					}}>
 					<h3>Dodaj Znajomego</h3>
 					<form onSubmit={handleSendInvitation} style={{ marginTop: '15px' }}>
@@ -317,7 +349,7 @@ const ContactsPage = () => {
 								fontFamily: 'monospace',
 								letterSpacing: '3px',
 								borderRadius: '5px',
-								border: '1px solid #ddd',
+								border: `1px solid ${palette.border}`,
 								textAlign: 'center',
 								marginBottom: '10px',
 							}}
@@ -329,8 +361,8 @@ const ContactsPage = () => {
 								style={{
 									flex: 1,
 									padding: '10px',
-									backgroundColor: '#007bff',
-									color: 'white',
+									backgroundColor: palette.accent,
+									color: palette.accentText,
 									border: 'none',
 									borderRadius: '5px',
 									cursor: 'pointer',
@@ -345,8 +377,8 @@ const ContactsPage = () => {
 								}}
 								style={{
 									padding: '10px 20px',
-									backgroundColor: '#6c757d',
-									color: 'white',
+									backgroundColor: palette.secondary,
+									color: palette.secondaryContrast,
 									border: 'none',
 									borderRadius: '5px',
 									cursor: 'pointer',
@@ -366,18 +398,19 @@ const ContactsPage = () => {
 						<div
 							key={invitation.contact_id}
 							style={{
-								backgroundColor: '#fff3cd',
+								backgroundColor: palette.warningBg,
 								padding: '15px',
 								borderRadius: '8px',
 								marginTop: '10px',
 								display: 'flex',
 								justifyContent: 'space-between',
 								alignItems: 'center',
-								border: '1px solid #ffc107',
+								border: `1px solid ${palette.warningBorder}`,
+								color: palette.warningText
 							}}>
 							<div>
 								<strong>{invitation.contactUser?.username}</strong>
-								<p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+								<p style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>
 									Wysłano: {new Date(invitation.created_at).toLocaleString('pl-PL')}
 								</p>
 							</div>
@@ -386,8 +419,8 @@ const ContactsPage = () => {
 									onClick={() => handleAccept(invitation.contact_id)}
 									style={{
 										padding: '8px 15px',
-										backgroundColor: '#28a745',
-										color: 'white',
+										backgroundColor: palette.success,
+										color: palette.successText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
@@ -398,8 +431,8 @@ const ContactsPage = () => {
 									onClick={() => handleReject(invitation.contact_id)}
 									style={{
 										padding: '8px 15px',
-										backgroundColor: '#dc3545',
-										color: 'white',
+										backgroundColor: palette.danger,
+										color: palette.dangerText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
@@ -420,14 +453,14 @@ const ContactsPage = () => {
 						<div
 							key={invitation.contact_id}
 							style={{
-								backgroundColor: '#f8f9fa',
+								backgroundColor: palette.surfaceMuted,
 								padding: '15px',
 								borderRadius: '8px',
 								marginTop: '10px',
-								border: '1px solid #ddd',
+								border: `1px solid ${palette.border}`,
 							}}>
 							<strong>{invitation.contactUser?.username}</strong>
-							<p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Oczekuje na akceptację...</p>
+							<p style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>Oczekuje na akceptację...</p>
 						</div>
 					))}
 				</div>
@@ -435,10 +468,10 @@ const ContactsPage = () => {
 
 			{/* Lista znajomych */}
 			{/* Lista znajomych */}
-			<div>
+			<div style={{ backgroundColor: palette.surface, borderRadius: '8px', padding: '12px', border: `1px solid ${palette.border}` }}>
 				<h3>✅ Znajomi ({contacts.length})</h3>
 				{contacts.length === 0 ? (
-					<p style={{ color: '#999', marginTop: '15px' }}>
+					<p style={{ color: palette.textMuted, marginTop: '15px' }}>
 						Nie masz jeszcze żadnych znajomych. Wygeneruj kod i podziel się nim z innymi!
 					</p>
 				) : (
@@ -446,18 +479,18 @@ const ContactsPage = () => {
 						<div
 							key={contact.contact_id}
 							style={{
-								backgroundColor: '#fff',
+								backgroundColor: palette.surface,
 								padding: '15px',
 								borderRadius: '8px',
 								marginTop: '10px',
-								border: '1px solid #ddd',
+								border: `1px solid ${palette.border}`,
 								display: 'flex',
 								justifyContent: 'space-between',
 								alignItems: 'center',
 							}}>
 							<div style={{ flex: 1 }}>
 								<strong>{contact.contactUser?.username}</strong>
-								<p style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+								<p style={{ fontSize: '12px', color: palette.textMuted, marginTop: '5px' }}>
 									Znajomy od: {new Date(contact.updated_at).toLocaleDateString('pl-PL')}
 								</p>
 							</div>
@@ -466,8 +499,8 @@ const ContactsPage = () => {
 									onClick={() => navigate('/chat')}
 									style={{
 										padding: '8px 15px',
-										backgroundColor: '#007bff',
-										color: 'white',
+										backgroundColor: palette.accent,
+										color: palette.accentText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',
@@ -479,8 +512,8 @@ const ContactsPage = () => {
 									onClick={() => handleDeleteContact(contact.contact_id)}
 									style={{
 										padding: '8px 15px',
-										backgroundColor: '#dc3545',
-										color: 'white',
+										backgroundColor: palette.danger,
+										color: palette.dangerText,
 										border: 'none',
 										borderRadius: '5px',
 										cursor: 'pointer',

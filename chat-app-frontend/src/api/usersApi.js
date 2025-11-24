@@ -20,6 +20,16 @@ export const usersApi = {
         const response = await axiosInstance.put('/users/default-disappearing-time', { timeInSeconds })
         return response.data
     },
+
+    getThemePreference: async () => {
+        const response = await axiosInstance.get('/users/theme-preference')
+        return response.data
+    },
+
+    updateThemePreference: async themePreference => {
+        const response = await axiosInstance.put('/users/theme-preference', { themePreference })
+        return response.data
+    },
 }
 
 

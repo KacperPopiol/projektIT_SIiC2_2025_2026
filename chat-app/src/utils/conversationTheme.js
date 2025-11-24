@@ -25,10 +25,15 @@ const resolveThemeForConversation = conversationInstance => {
 	const persistedThemeSettings = conversationInstance.theme_settings
 
 	if (persistedThemeSettings && typeof persistedThemeSettings === 'object') {
+		const variables =
+			activeThemeKey === 'default'
+				? themeDefinition?.variables || persistedThemeSettings.variables || {}
+				: persistedThemeSettings.variables || themeDefinition?.variables || {}
+
 		return {
 			key: activeThemeKey,
 			name: persistedThemeSettings.name || themeDefinition?.name || activeThemeKey,
-			variables: persistedThemeSettings.variables || themeDefinition?.variables || {},
+			variables,
 		}
 	}
 
