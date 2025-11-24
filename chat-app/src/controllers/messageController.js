@@ -481,7 +481,21 @@ exports.exportConversation = async (req, res) => {
 			},
 		})
 
-		if (!participant) {
+		const conversationGroup = await db.Conversation.findOne({
+			where:{
+				conversation_id: conversationId,
+			}
+		})
+
+		const conversationGroupMember = await db.GroupMember.findOne({
+			where: {
+				group_id: conversationGroup ? conversationGroup.group_id : null,
+				user_id: userId,
+				status: 'accepted',
+			},
+		})
+
+		if (!participant && !conversationGroupMember) {
 			return res.status(403).json({
 				error: 'Nie masz dostępu do tej konwersacji',
 			})
