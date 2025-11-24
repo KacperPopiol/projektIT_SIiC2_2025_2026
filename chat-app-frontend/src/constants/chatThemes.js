@@ -11,7 +11,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#1f2328',
 			outgoingBubbleColor: '#007bff',
 			outgoingTextColor: '#ffffff',
-			systemTextColor: '#6c757d',
+			systemTextColor: '#495057',
 		},
 	},
 	{
@@ -26,7 +26,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#ffebd6',
 			outgoingBubbleColor: '#ff7a18',
 			outgoingTextColor: '#ffffff',
-			systemTextColor: '#ffd6a5',
+			systemTextColor: '#cc5500',
 		},
 	},
 	{
@@ -41,7 +41,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#e2f6e9',
 			outgoingBubbleColor: '#71b280',
 			outgoingTextColor: '#0f2f35',
-			systemTextColor: '#9ed7b2',
+			systemTextColor: '#2d5a3d',
 		},
 	},
 	{
@@ -56,7 +56,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#dfe9ff',
 			outgoingBubbleColor: '#4dabf7',
 			outgoingTextColor: '#04122b',
-			systemTextColor: '#8fb7ff',
+			systemTextColor: '#0056b3',
 		},
 	},
 	{
@@ -71,7 +71,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#493058',
 			outgoingBubbleColor: '#ad80ff',
 			outgoingTextColor: '#ffffff',
-			systemTextColor: '#6f4a82',
+			systemTextColor: '#5a3a6b',
 		},
 	},
 	{
@@ -86,7 +86,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#d7f1ff',
 			outgoingBubbleColor: '#00c6ff',
 			outgoingTextColor: '#01365a',
-			systemTextColor: '#89d3ff',
+			systemTextColor: '#0066cc',
 		},
 	},
 	{
@@ -101,7 +101,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#f5d9ff',
 			outgoingBubbleColor: '#9c1de7',
 			outgoingTextColor: '#f9efff',
-			systemTextColor: '#d79dee',
+			systemTextColor: '#7a1da8',
 		},
 	},
 	{
@@ -116,7 +116,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#e5ffff',
 			outgoingBubbleColor: '#0bffb0',
 			outgoingTextColor: '#012b1f',
-			systemTextColor: '#9cfef0',
+			systemTextColor: '#00a67e',
 		},
 	},
 	{
@@ -131,7 +131,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#f4e5ff',
 			outgoingBubbleColor: '#ff0080',
 			outgoingTextColor: '#080108',
-			systemTextColor: '#ff62b9',
+			systemTextColor: '#cc0066',
 		},
 	},
 	{
@@ -146,7 +146,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#8a4f2b',
 			outgoingBubbleColor: '#ff9a9e',
 			outgoingTextColor: '#4a1f1f',
-			systemTextColor: '#c26a5d',
+			systemTextColor: '#a84a3d',
 		},
 	},
 	{
@@ -162,7 +162,7 @@ export const CHAT_THEMES = [
 			incomingTextColor: '#d6e9ff',
 			outgoingBubbleColor: '#39a0ed',
 			outgoingTextColor: '#02131f',
-			systemTextColor: '#8fbce8',
+			systemTextColor: '#1e6fa8',
 		},
 	},
 ]
