@@ -18,7 +18,6 @@ const modalStyles = {
 	width: '100%',
 	maxWidth: '620px',
     maxHeight: '85vh',
-	maxHeight: '80vh',
 	borderRadius: '16px',
 	backgroundColor: 'var(--card-bg)',
 	boxShadow: 'var(--shadow-md)',
