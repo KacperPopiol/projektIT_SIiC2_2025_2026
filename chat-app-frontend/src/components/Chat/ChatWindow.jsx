@@ -10,7 +10,7 @@ import DisappearingMessagesBanner from './DisappearingMessagesBanner'
 import ThemePickerModal from './ThemePickerModal'
 import { CHAT_THEMES } from '../../constants/chatThemes'
 
-const ChatWindow = ({ conversation }) => {
+const ChatWindow = ({ conversation, setter }) => {
 	const [messages, setMessages] = useState([])
 	const [loading, setLoading] = useState(true)
 	const [typingUsers, setTypingUsers] = useState([])
@@ -498,6 +498,8 @@ const ChatWindow = ({ conversation }) => {
 			alert('Błąd archiwizacji: ' + (err.response?.data?.error || err.message))
 		} finally {
 			setMenuLoading(false)
+			setter(); // Odśwież listę konwersacji w ChatPage
+
 		}
 	}
 

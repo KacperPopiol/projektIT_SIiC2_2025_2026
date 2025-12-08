@@ -24,6 +24,8 @@ const ChatPage = () => {
   const [loading, setLoading] = useState(true);
   const { requestPermission } = useNotifications();
 
+  const [refresh, setRefresh] = useState(false);
+
   const ui = {
     bg: "var(--color-bg)",
     surface: "var(--color-surface)",
@@ -858,7 +860,7 @@ const ChatPage = () => {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {lastMessage.content}
+                                {/* {lastMessage.content} */}
                               </div>
                             )}
                             <div
@@ -1000,8 +1002,8 @@ const ChatPage = () => {
                                   whiteSpace: "nowrap",
                                 }}
                               >
-                                {lastMessage.sender?.username}:{" "}
-                                {lastMessage.content}
+                                {/* {lastMessage.sender?.username}:{" "} */}
+                                {/* {lastMessage.content} */}
                               </div>
                             )}
                             <div
@@ -1113,7 +1115,7 @@ const ChatPage = () => {
       {/* Chat Window */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {selectedConversation ? (
-          <ChatWindow conversation={selectedConversation} />
+          <ChatWindow conversation={selectedConversation} setter={() => {loadData()}} />
         ) : (
           <div
             style={{
