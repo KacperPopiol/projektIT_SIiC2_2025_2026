@@ -849,6 +849,134 @@ module.exports = io => {
 				status: 'offline',
 			})
 		})
+
+		// ==================== WEBRTC - OFERTA ====================
+		socket.on('webrtc_offer', data => {
+			try {
+				const { conversationId, targetUserId, offer, callType } = data
+
+				if (!conversationId || !targetUserId || !offer) {
+					socket.emit('error', {
+						message: 'Brak wymaganych danych dla WebRTC offer',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				console.log(`📞 WebRTC offer od ${socket.userId} do ${targetUserId} (${callType || 'video'})`)
+
+				// Wyślij ofertę do odbiorcy
+				io.to(`user:${targetUserId}`).emit('webrtc_offer', {
+					fromUserId: socket.userId,
+					fromUsername: socket.username,
+					conversationId,
+					offer,
+					callType: callType || 'video',
+				})
+			} catch (error) {
+				console.error('❌ Błąd obsługi WebRTC offer:', error)
+				socket.emit('error', {
+					message: 'Nie udało się wysłać oferty WebRTC',
+					code: 'SERVER_ERROR',
+				})
+			}
+		})
+
+		// ==================== WEBRTC - ODPOWIEDŹ ====================
+		socket.on('webrtc_answer', data => {
+			try {
+				const { conversationId, targetUserId, answer } = data
+
+				if (!conversationId || !targetUserId || !answer) {
+					socket.emit('error', {
+						message: 'Brak wymaganych danych dla WebRTC answer',
+						code: 'INVALID_DATA',
+					})
+					return
+				}
+
+				console.log(`📞 WebRTC answer od ${socket.userId} do ${targetUserId}`)
+
+				// Wyślij odpowiedź do inicjatora
+				io.to(`user:${targetUserId}`).emit('webrtc_answer', {
+					fromUserId: socket.userId,
+					fromUsername: socket.username,
+					conversationId,
+					answer,
+				})
+			} catch (error) {
+				console.error('❌ Błąd obsługi WebRTC answer:', error)
+				socket.emit('error', {
+					message: 'Nie udało się wysłać odpowiedzi WebRTC',
+					code: 'SERVER_ERROR',
+				})
+			}
+		})
+
+		// ==================== WEBRTC - ICE CANDIDATE ====================
+		socket.on('webrtc_ice_candidate', data => {
+			try {
+				const { conversationId, targetUserId, candidate } = data
+
+				if (!conversationId || !targetUserId || !candidate) {
+					return // ICE candidate nie jest krytyczny, ignoruj błędy
+				}
+
+				// Wyślij ICE candidate do odbiorcy
+				io.to(`user:${targetUserId}`).emit('webrtc_ice_candidate', {
+					fromUserId: socket.userId,
+					fromUsername: socket.username,
+					conversationId,
+					candidate,
+				})
+			} catch (error) {
+				console.error('❌ Błąd obsługi WebRTC ICE candidate:', error)
+			}
+		})
+
+		// ==================== WEBRTC - ZAKOŃCZENIE POŁĄCZENIA ====================
+		socket.on('webrtc_end_call', data => {
+			try {
+				const { conversationId, targetUserId } = data
+
+				if (!conversationId || !targetUserId) {
+					return
+				}
+
+				console.log(`📞 WebRTC end call od ${socket.userId} do ${targetUserId}`)
+
+				// Powiadom odbiorcę o zakończeniu
+				io.to(`user:${targetUserId}`).emit('webrtc_end_call', {
+					fromUserId: socket.userId,
+					fromUsername: socket.username,
+					conversationId,
+				})
+			} catch (error) {
+				console.error('❌ Błąd obsługi WebRTC end call:', error)
+			}
+		})
+
+		// ==================== WEBRTC - ODRZUCENIE POŁĄCZENIA ====================
+		socket.on('webrtc_reject', data => {
+			try {
+				const { conversationId, targetUserId } = data
+
+				if (!conversationId || !targetUserId) {
+					return
+				}
+
+				console.log(`📞 WebRTC reject od ${socket.userId} do ${targetUserId}`)
+
+				// Powiadom inicjatora o odrzuceniu
+				io.to(`user:${targetUserId}`).emit('webrtc_reject', {
+					fromUserId: socket.userId,
+					fromUsername: socket.username,
+					conversationId,
+				})
+			} catch (error) {
+				console.error('❌ Błąd obsługi WebRTC reject:', error)
+			}
+		})
 	})
 
 	console.log('📡 Socket.io handler initialized')

@@ -1,649 +1,833 @@
-import { useState, useEffect, useMemo } from 'react'
-import { messagesApi } from '../../api/messagesApi'
-import { usersApi } from '../../api/usersApi'
-import { useSocket } from '../../hooks/useSocket'
-import { useAuth } from '../../hooks/useAuth'
-import { useThemeContext } from '../../contexts/ThemeContext'
-import MessageList from './MessageList'
-import MessageInput from './MessageInput'
-import DisappearingMessagesBanner from './DisappearingMessagesBanner'
-import ThemePickerModal from './ThemePickerModal'
-import { CHAT_THEMES } from '../../constants/chatThemes'
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useWebRTC } from "../../hooks/useWebRTC";
+import { messagesApi } from "../../api/messagesApi";
+import { usersApi } from "../../api/usersApi";
+import { useSocket } from "../../hooks/useSocket";
+import { useAuth } from "../../hooks/useAuth";
+import { useThemeContext } from "../../contexts/ThemeContext";
+import MessageList from "./MessageList";
+import MessageInput from "./MessageInput";
+import DisappearingMessagesBanner from "./DisappearingMessagesBanner";
+import ThemePickerModal from "./ThemePickerModal";
+import VideoCall from "./VideoCall";
+import { CHAT_THEMES } from "../../constants/chatThemes";
 
 const ChatWindow = ({ conversation, setter }) => {
-	const [messages, setMessages] = useState([])
-	const [loading, setLoading] = useState(true)
-	const [typingUsers, setTypingUsers] = useState([])
-	const [showMenu, setShowMenu] = useState(false)
-	const [menuLoading, setMenuLoading] = useState(false)
-	const [disappearingMessagesEnabled, setDisappearingMessagesEnabled] = useState(false)
-	const [disappearingMessagesEnabledAt, setDisappearingMessagesEnabledAt] = useState(null)
-	const [disappearingTime, setDisappearingTime] = useState(null) // Czas znikania użytkownika który włączył tryb
-	const [availableThemes, setAvailableThemes] = useState(CHAT_THEMES)
-	const [activeTheme, setActiveTheme] = useState(CHAT_THEMES[0])
-	const [themeModalOpen, setThemeModalOpen] = useState(false)
-	const [themeLoading, setThemeLoading] = useState(false)
-	const { socket, connected } = useSocket()
-	const { user } = useAuth()
-	const { isDarkMode } = useThemeContext()
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const [showMenu, setShowMenu] = useState(false);
+  const [menuLoading, setMenuLoading] = useState(false);
+  const [disappearingMessagesEnabled, setDisappearingMessagesEnabled] =
+    useState(false);
+  const [disappearingMessagesEnabledAt, setDisappearingMessagesEnabledAt] =
+    useState(null);
+  const [disappearingTime, setDisappearingTime] = useState(null); // Czas znikania użytkownika który włączył tryb
+  const [availableThemes, setAvailableThemes] = useState(CHAT_THEMES);
+  const [activeTheme, setActiveTheme] = useState(CHAT_THEMES[0]);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [themeLoading, setThemeLoading] = useState(false);
+  const [remoteUserId, setRemoteUserId] = useState(null);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [callType, setCallType] = useState("video"); // 'video' or 'audio'
+  const { socket, connected } = useSocket();
+  const { user } = useAuth();
+  const { isDarkMode } = useThemeContext();
 
-	const normalizeThemePayload = theme => {
-		if (!theme) return null
-		const key = theme.key || theme.themeKey || theme.id || 'default'
-		const baseDefinition = CHAT_THEMES.find(t => t.key === key) || CHAT_THEMES[0]
-		const resolvedVariables =
-			key === 'default'
-				? baseDefinition.variables
-				: theme.variables || theme.themeVariables || baseDefinition.variables || CHAT_THEMES[0].variables
+  const normalizeThemePayload = (theme) => {
+    if (!theme) return null;
+    const key = theme.key || theme.themeKey || theme.id || "default";
+    const baseDefinition =
+      CHAT_THEMES.find((t) => t.key === key) || CHAT_THEMES[0];
+    const resolvedVariables =
+      key === "default"
+        ? baseDefinition.variables
+        : theme.variables ||
+          theme.themeVariables ||
+          baseDefinition.variables ||
+          CHAT_THEMES[0].variables;
 
-		return {
-			key,
-			name: theme.name || theme.themeName || theme.label || baseDefinition.name || 'Motyw',
-			variables: resolvedVariables,
-		}
-	}
+    return {
+      key,
+      name:
+        theme.name ||
+        theme.themeName ||
+        theme.label ||
+        baseDefinition.name ||
+        "Motyw",
+      variables: resolvedVariables,
+    };
+  };
 
-	const isSameConversation = id => {
-		if (id === undefined || id === null) return false
-		return String(id) === String(conversation.conversationId)
-	}
+  const isSameConversation = (id) => {
+    if (id === undefined || id === null) return false;
+    return String(id) === String(conversation.conversationId);
+  };
 
-	const themeVariables = useMemo(() => {
-		if (activeTheme?.variables) {
-			return activeTheme.variables
-		}
-		return CHAT_THEMES[0].variables
-	}, [activeTheme])
+  const themeVariables = useMemo(() => {
+    if (activeTheme?.variables) {
+      return activeTheme.variables;
+    }
+    return CHAT_THEMES[0].variables;
+  }, [activeTheme]);
 
-	const isCssVariable = value => typeof value === 'string' && value.startsWith('var(')
-	const withOpacity = (color, fallbackVar, opacity = '33') => {
-		if (!color) {
-			return fallbackVar
-		}
-		return isCssVariable(color) ? fallbackVar : `${color}${opacity}`
-	}
+  const isCssVariable = (value) =>
+    typeof value === "string" && value.startsWith("var(");
+  const withOpacity = (color, fallbackVar, opacity = "33") => {
+    if (!color) {
+      return fallbackVar;
+    }
+    return isCssVariable(color) ? fallbackVar : `${color}${opacity}`;
+  };
 
-	const accentColor = themeVariables.accentColor || 'var(--color-accent)'
-	// Użyj globalnego motywu dla headera i menu
-	const headerBackgroundColor = 'var(--chat-header-bg)'
-	const headerBorderColor = 'var(--chat-header-border)'
-	const headerTextColor = 'var(--color-text-primary)'
-	const menuBackgroundColor = 'var(--chat-menu-bg)'
-	const menuBorderColor = 'var(--chat-menu-border)'
-	const menuTextColor = 'var(--chat-menu-text)'
-	const typingBackgroundColor =
-		themeVariables.typingBackgroundColor || (isCssVariable(accentColor) ? 'var(--chat-typing-bg)' : 'var(--color-surface)')
-	const menuHoverBackgroundColor = 'var(--chat-menu-hover-bg)'
-	const handleMenuItemEnter = event => {
-		event.currentTarget.style.backgroundColor = menuHoverBackgroundColor
-	}
-	const handleMenuItemLeave = event => {
-		event.currentTarget.style.backgroundColor = menuBackgroundColor
-	}
+  const accentColor = themeVariables.accentColor || "var(--color-accent)";
+  // Użyj globalnego motywu dla headera i menu
+  const headerBackgroundColor = "var(--chat-header-bg)";
+  const headerBorderColor = "var(--chat-header-border)";
+  const headerTextColor = "var(--color-text-primary)";
+  const menuBackgroundColor = "var(--chat-menu-bg)";
+  const menuBorderColor = "var(--chat-menu-border)";
+  const menuTextColor = "var(--chat-menu-text)";
+  const typingBackgroundColor =
+    themeVariables.typingBackgroundColor ||
+    (isCssVariable(accentColor)
+      ? "var(--chat-typing-bg)"
+      : "var(--color-surface)");
+  const menuHoverBackgroundColor = "var(--chat-menu-hover-bg)";
+  const handleMenuItemEnter = (event) => {
+    event.currentTarget.style.backgroundColor = menuHoverBackgroundColor;
+  };
+  const handleMenuItemLeave = (event) => {
+    event.currentTarget.style.backgroundColor = menuBackgroundColor;
+  };
 
-	const addMessageToList = newMessage => {
-		if (!newMessage || !newMessage.message_id) {
-			return
-		}
+  const addMessageToList = (newMessage) => {
+    if (!newMessage || !newMessage.message_id) {
+      return;
+    }
 
-		const normalizedMessage = {
-			...newMessage,
-			message_type: newMessage.message_type || newMessage.messageType || 'user',
-			system_payload: newMessage.system_payload || newMessage.systemPayload || null,
-		}
+    const normalizedMessage = {
+      ...newMessage,
+      message_type: newMessage.message_type || newMessage.messageType || "user",
+      system_payload:
+        newMessage.system_payload || newMessage.systemPayload || null,
+    };
 
-		let themeFromPayload = null
-		if (
-			normalizedMessage.message_type === 'system' &&
-			normalizedMessage.system_payload &&
-			normalizedMessage.system_payload.type === 'theme_change'
-		) {
-			const payload = normalizedMessage.system_payload
-			themeFromPayload = normalizeThemePayload({
-				key: payload.themeKey,
-				name: payload.themeName,
-				variables: payload.variables,
-			})
-		}
+    let themeFromPayload = null;
+    if (
+      normalizedMessage.message_type === "system" &&
+      normalizedMessage.system_payload &&
+      normalizedMessage.system_payload.type === "theme_change"
+    ) {
+      const payload = normalizedMessage.system_payload;
+      themeFromPayload = normalizeThemePayload({
+        key: payload.themeKey,
+        name: payload.themeName,
+        variables: payload.variables,
+      });
+    }
 
-		setMessages(prev => {
-			const exists = prev.some(msg => msg.message_id === normalizedMessage.message_id)
-			if (exists) {
-				return prev
-			}
-			return [...prev, normalizedMessage]
-		})
+    setMessages((prev) => {
+      const exists = prev.some(
+        (msg) => msg.message_id === normalizedMessage.message_id,
+      );
+      if (exists) {
+        return prev;
+      }
+      return [...prev, normalizedMessage];
+    });
 
-		if (themeFromPayload) {
-			setActiveTheme(themeFromPayload)
-		}
-	}
+    if (themeFromPayload) {
+      setActiveTheme(themeFromPayload);
+    }
+  };
 
-	// Ładowanie wiadomości i ustawień konwersacji przy zmianie konwersacji
-	useEffect(() => {
-		loadMessages()
-		loadConversationSettings()
-	}, [conversation.conversationId])
+  // Ładowanie wiadomości i ustawień konwersacji przy zmianie konwersacji
+  useEffect(() => {
+    loadMessages();
+    loadConversationSettings();
+    loadRemoteUserId();
+  }, [conversation.conversationId]);
 
-	// Ładowanie listy motywów (raz na start)
-	useEffect(() => {
-		const fetchThemes = async () => {
-			try {
-				const response = await messagesApi.getAvailableThemes()
-				if (response?.success && Array.isArray(response.themes) && response.themes.length > 0) {
-					setAvailableThemes(response.themes)
-				}
-			} catch (error) {
-				console.error('Błąd ładowania motywów czatu:', error)
-			}
-		}
+  // Pobranie remoteUserId dla prywatnej konwersacji
+  const loadRemoteUserId = () => {
+    if (conversation.type !== "private") {
+      setRemoteUserId(null);
+      return;
+    }
 
-		fetchThemes()
-	}, [])
+    // Jeśli remoteUserId jest przekazany jako prop (z ChatPage)
+    if (conversation.remoteUserId) {
+      setRemoteUserId(conversation.remoteUserId);
+      return;
+    }
 
-	// Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
-	useEffect(() => {
-		if (!socket || !connected) return
+    // Fallback: spróbuj pobrać z API
+    const fetchRemoteUserId = async () => {
+      try {
+        const conversationsResponse = await messagesApi.getConversations(false);
+        const privateConv = conversationsResponse.privateConversations?.find(
+          (c) => c.conversation_id === conversation.conversationId,
+        );
 
-		console.log('🔌 Setting up socket listeners for conversation:', conversation.conversationId)
+        if (privateConv?.conversation?.participants) {
+          const otherParticipant = privateConv.conversation.participants.find(
+            (p) => p.user?.user_id !== user?.userId,
+          );
+          if (otherParticipant?.user?.user_id) {
+            setRemoteUserId(otherParticipant.user.user_id);
+          }
+        }
+      } catch (error) {
+        console.error("Błąd pobierania remoteUserId:", error);
+      }
+    };
 
-		// Dołączenie do pokoju konwersacji
-		if (conversation.type === 'private') {
-			socket.emit('join_conversation', { conversationId: conversation.conversationId })
-		} else {
-			socket.emit('join_group', { groupId: conversation.groupId })
-		}
+    fetchRemoteUserId();
+  };
 
-		// Nasłuchiwanie na nowe wiadomości prywatne
-		const handleNewPrivateMessage = data => {
-			if (isSameConversation(data.conversationId)) {
-				addMessageToList({
-						message_id: data.messageId,
-					conversation_id: Number(data.conversationId),
-						sender_id: data.senderId,
-						content: data.content,
-						is_encrypted: data.isEncrypted,
-					message_type: data.messageType || 'user',
-					system_payload: data.systemPayload || null,
-						created_at: data.createdAt,
-						sender: {
-							username: data.senderUsername,
-						},
-						readStatuses: [],
-						files: data.files || [], // Dodaj pliki z socket event
-				})
-			}
-		}
+  // Ładowanie listy motywów (raz na start)
+  useEffect(() => {
+    const fetchThemes = async () => {
+      try {
+        const response = await messagesApi.getAvailableThemes();
+        if (
+          response?.success &&
+          Array.isArray(response.themes) &&
+          response.themes.length > 0
+        ) {
+          setAvailableThemes(response.themes);
+        }
+      } catch (error) {
+        console.error("Błąd ładowania motywów czatu:", error);
+      }
+    };
 
-		// Nasłuchiwanie na nowe wiadomości grupowe
-		const handleNewGroupMessage = data => {
-			console.log('📨 New group message received:', data)
-			if (isSameConversation(data.conversationId)) {
-				addMessageToList({
-						message_id: data.messageId,
-					conversation_id: Number(data.conversationId),
-						sender_id: data.senderId,
-						content: data.content,
-						is_encrypted: data.isEncrypted,
-					message_type: data.messageType || 'user',
-					system_payload: data.systemPayload || null,
-						created_at: data.createdAt,
-						sender: {
-							username: data.senderUsername,
-						},
-						readStatuses: [],
-						files: data.files || [], // Dodaj pliki z socket event
-				})
-			}
-		}
+    fetchThemes();
+  }, []);
 
-		// Nasłuchiwanie na statusy odczytania
-		const handleMessageRead = data => {
-			console.log('✅ Message read:', data)
-			setMessages(prev =>
-				prev.map(msg => {
-					if (msg.message_id === data.messageId) {
-						// Zaktualizuj istniejący status odczytania lub dodaj nowy
-						const existingStatusIndex = (msg.readStatuses || []).findIndex(
-							s => s.user_id === data.readBy
-						)
-						const newStatus = {
-							user_id: data.readBy,
-							is_read: true,
-							read_at: data.readAt,
-							delete_at: data.deleteAt || null,
-						}
-						if (existingStatusIndex >= 0) {
-							const updatedStatuses = [...(msg.readStatuses || [])]
-							updatedStatuses[existingStatusIndex] = newStatus
-							return {
-								...msg,
-								readStatuses: updatedStatuses,
-							}
-						} else {
-							return {
-								...msg,
-								readStatuses: [...(msg.readStatuses || []), newStatus],
-							}
-						}
-					}
-					return msg
-				})
-			)
-		}
+  // Socket.io - dołączanie do pokoju i nasłuchiwanie na eventy
+  useEffect(() => {
+    if (!socket || !connected) return;
 
-		// Nasłuchiwanie na wskaźnik pisania
-		const handleUserTyping = data => {
-			if (data.conversationId === conversation.conversationId && data.userId !== user?.userId) {
-				setTypingUsers(prev => {
-					if (!prev.find(u => u.userId === data.userId)) {
-						return [...prev, { userId: data.userId, username: data.username }]
-					}
-					return prev
-				})
-			}
-		}
+    console.log(
+      "🔌 Setting up socket listeners for conversation:",
+      conversation.conversationId,
+    );
 
-		// Nasłuchiwanie na przestanie pisanie
-		const handleUserStopTyping = data => {
-			if (data.conversationId === conversation.conversationId) {
-				setTypingUsers(prev => prev.filter(u => u.userId !== data.userId))
-			}
-		}
+    // Dołączenie do pokoju konwersacji
+    if (conversation.type === "private") {
+      socket.emit("join_conversation", {
+        conversationId: conversation.conversationId,
+      });
+    } else {
+      socket.emit("join_group", { groupId: conversation.groupId });
+    }
 
-		// Nasłuchiwanie na przełączenie trybu znikających wiadomości
-		const handleDisappearingMessagesToggled = data => {
-			if (isSameConversation(data.conversationId)) {
-				setDisappearingMessagesEnabled(data.enabled)
-				setDisappearingMessagesEnabledAt(data.enabledAt || null)
-				// Użyj czasu znikania użytkownika który włączył tryb
-				if (data.enabled && data.disappearingTime) {
-					setDisappearingTime(data.disappearingTime)
-				} else {
-					setDisappearingTime(null)
-				}
-			}
-		}
+    // Nasłuchiwanie na nowe wiadomości prywatne
+    const handleNewPrivateMessage = (data) => {
+      if (isSameConversation(data.conversationId)) {
+        addMessageToList({
+          message_id: data.messageId,
+          conversation_id: Number(data.conversationId),
+          sender_id: data.senderId,
+          content: data.content,
+          is_encrypted: data.isEncrypted,
+          message_type: data.messageType || "user",
+          system_payload: data.systemPayload || null,
+          created_at: data.createdAt,
+          sender: {
+            username: data.senderUsername,
+          },
+          readStatuses: [],
+          files: data.files || [], // Dodaj pliki z socket event
+        });
+      }
+    };
 
-		// Nasłuchiwanie na zniknięcie wiadomości (z schedulera)
-		const handleMessageDisappeared = data => {
-			console.log('🗑️ Message disappeared:', data)
-			// Usuń wiadomość z lokalnego stanu (scheduler usunął z bazy)
-			setMessages(prev => prev.filter(msg => msg.message_id !== data.messageId))
-		}
+    // Nasłuchiwanie na nowe wiadomości grupowe
+    const handleNewGroupMessage = (data) => {
+      console.log("📨 New group message received:", data);
+      if (isSameConversation(data.conversationId)) {
+        addMessageToList({
+          message_id: data.messageId,
+          conversation_id: Number(data.conversationId),
+          sender_id: data.senderId,
+          content: data.content,
+          is_encrypted: data.isEncrypted,
+          message_type: data.messageType || "user",
+          system_payload: data.systemPayload || null,
+          created_at: data.createdAt,
+          sender: {
+            username: data.senderUsername,
+          },
+          readStatuses: [],
+          files: data.files || [], // Dodaj pliki z socket event
+        });
+      }
+    };
 
-		const handleConversationThemeChanged = data => {
-			if (isSameConversation(data.conversationId) && data.theme) {
-				const normalizedTheme = normalizeThemePayload(data.theme)
-				if (normalizedTheme) {
-					setActiveTheme(normalizedTheme)
-				}
-			}
-		}
+    // Nasłuchiwanie na statusy odczytania
+    const handleMessageRead = (data) => {
+      console.log("✅ Message read:", data);
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.message_id === data.messageId) {
+            // Zaktualizuj istniejący status odczytania lub dodaj nowy
+            const existingStatusIndex = (msg.readStatuses || []).findIndex(
+              (s) => s.user_id === data.readBy,
+            );
+            const newStatus = {
+              user_id: data.readBy,
+              is_read: true,
+              read_at: data.readAt,
+              delete_at: data.deleteAt || null,
+            };
+            if (existingStatusIndex >= 0) {
+              const updatedStatuses = [...(msg.readStatuses || [])];
+              updatedStatuses[existingStatusIndex] = newStatus;
+              return {
+                ...msg,
+                readStatuses: updatedStatuses,
+              };
+            } else {
+              return {
+                ...msg,
+                readStatuses: [...(msg.readStatuses || []), newStatus],
+              };
+            }
+          }
+          return msg;
+        }),
+      );
+    };
 
-		// Listenery
-		socket.on('new_private_message', handleNewPrivateMessage)
-		socket.on('new_group_message', handleNewGroupMessage)
-		socket.on('message_read', handleMessageRead)
-		socket.on('user_typing', handleUserTyping)
-		socket.on('user_stop_typing', handleUserStopTyping)
-		socket.on('disappearing_messages_toggled', handleDisappearingMessagesToggled)
-		socket.on('message_disappeared', handleMessageDisappeared)
-		socket.on('conversation_theme_changed', handleConversationThemeChanged)
+    // Nasłuchiwanie na wskaźnik pisania
+    const handleUserTyping = (data) => {
+      if (
+        data.conversationId === conversation.conversationId &&
+        data.userId !== user?.userId
+      ) {
+        setTypingUsers((prev) => {
+          if (!prev.find((u) => u.userId === data.userId)) {
+            return [...prev, { userId: data.userId, username: data.username }];
+          }
+          return prev;
+        });
+      }
+    };
 
-		// Cleanup - usunięcie listenerów i opuszczenie pokoju
-		return () => {
-			console.log('🔌 Cleaning up socket listeners')
-			socket.off('new_private_message', handleNewPrivateMessage)
-			socket.off('new_group_message', handleNewGroupMessage)
-			socket.off('message_read', handleMessageRead)
-			socket.off('user_typing', handleUserTyping)
-			socket.off('user_stop_typing', handleUserStopTyping)
-			socket.off('disappearing_messages_toggled', handleDisappearingMessagesToggled)
-			socket.off('message_disappeared', handleMessageDisappeared)
-			socket.off('conversation_theme_changed', handleConversationThemeChanged)
+    // Nasłuchiwanie na przestanie pisanie
+    const handleUserStopTyping = (data) => {
+      if (data.conversationId === conversation.conversationId) {
+        setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
+      }
+    };
 
-			if (conversation.type === 'private') {
-				socket.emit('leave_conversation', { conversationId: conversation.conversationId })
-			} else {
-				socket.emit('leave_group', { groupId: conversation.groupId })
-			}
-		}
-	}, [socket, connected, conversation, user])
+    // Nasłuchiwanie na przełączenie trybu znikających wiadomości
+    const handleDisappearingMessagesToggled = (data) => {
+      if (isSameConversation(data.conversationId)) {
+        setDisappearingMessagesEnabled(data.enabled);
+        setDisappearingMessagesEnabledAt(data.enabledAt || null);
+        // Użyj czasu znikania użytkownika który włączył tryb
+        if (data.enabled && data.disappearingTime) {
+          setDisappearingTime(data.disappearingTime);
+        } else {
+          setDisappearingTime(null);
+        }
+      }
+    };
 
-	// Automatyczne oznaczanie wiadomości jako przeczytane
-	useEffect(() => {
-		if (!socket || !connected || messages.length === 0) return
+    // Nasłuchiwanie na zniknięcie wiadomości (z schedulera)
+    const handleMessageDisappeared = (data) => {
+      console.log("🗑️ Message disappeared:", data);
+      // Usuń wiadomość z lokalnego stanu (scheduler usunął z bazy)
+      setMessages((prev) =>
+        prev.filter((msg) => msg.message_id !== data.messageId),
+      );
+    };
 
-		// Oznaczenie wszystkich nieprzeczytanych wiadomości jako przeczytane
-		messages.forEach(message => {
-			if (message.sender_id !== user?.userId) {
-				const isRead = message.readStatuses?.some(s => s.user_id === user?.userId && s.is_read)
-				if (!isRead) {
-					socket.emit('mark_message_read', { messageId: message.message_id })
-				}
-			}
-		})
-	}, [messages, socket, connected, user])
+    const handleConversationThemeChanged = (data) => {
+      if (isSameConversation(data.conversationId) && data.theme) {
+        const normalizedTheme = normalizeThemePayload(data.theme);
+        if (normalizedTheme) {
+          setActiveTheme(normalizedTheme);
+        }
+      }
+    };
 
-	useEffect(() => {
-		const handleClickOutside = event => {
-			if (showMenu && !event.target.closest('button')) {
-				setShowMenu(false)
-			}
-		}
+    // Listenery
+    socket.on("new_private_message", handleNewPrivateMessage);
+    socket.on("new_group_message", handleNewGroupMessage);
+    socket.on("message_read", handleMessageRead);
+    socket.on("user_typing", handleUserTyping);
+    socket.on("user_stop_typing", handleUserStopTyping);
+    socket.on(
+      "disappearing_messages_toggled",
+      handleDisappearingMessagesToggled,
+    );
+    socket.on("message_disappeared", handleMessageDisappeared);
+    socket.on("conversation_theme_changed", handleConversationThemeChanged);
 
-		document.addEventListener('click', handleClickOutside)
-		return () => document.removeEventListener('click', handleClickOutside)
-	}, [showMenu])
+    // Przychodzące połączenia WebRTC są obsługiwane przez useWebRTC w VideoCallContainer
 
-	// Ładowanie wiadomości
-	const loadMessages = async () => {
-		try {
-			setLoading(true)
-			const response = await messagesApi.getMessages(conversation.conversationId)
-			setMessages(response.messages || [])
-		} catch (error) {
-			console.error('Błąd ładowania wiadomości:', error)
-		} finally {
-			setLoading(false)
-		}
-	}
+    // Cleanup - usunięcie listenerów i opuszczenie pokoju
+    return () => {
+      console.log("🔌 Cleaning up socket listeners");
+      socket.off("new_private_message", handleNewPrivateMessage);
+      socket.off("new_group_message", handleNewGroupMessage);
+      socket.off("message_read", handleMessageRead);
+      socket.off("user_typing", handleUserTyping);
+      socket.off("user_stop_typing", handleUserStopTyping);
+      socket.off(
+        "disappearing_messages_toggled",
+        handleDisappearingMessagesToggled,
+      );
+      socket.off("message_disappeared", handleMessageDisappeared);
+      socket.off("conversation_theme_changed", handleConversationThemeChanged);
 
-	// Ładowanie ustawień konwersacji
-	const loadConversationSettings = async () => {
-		try {
-			const response = await messagesApi.getConversationSettings(conversation.conversationId)
-			if (response.success && response.settings) {
-				setDisappearingMessagesEnabled(response.settings.disappearing_messages_enabled || false)
-				setDisappearingMessagesEnabledAt(response.settings.disappearing_messages_enabled_at || null)
-				// Użyj czasu znikania użytkownika który włączył tryb (jeśli tryb włączony)
-				if (response.settings.disappearing_messages_enabled && response.settings.disappearing_time) {
-					setDisappearingTime(response.settings.disappearing_time)
-				} else {
-					setDisappearingTime(null)
-				}
+      if (conversation.type === "private") {
+        socket.emit("leave_conversation", {
+          conversationId: conversation.conversationId,
+        });
+      } else {
+        socket.emit("leave_group", { groupId: conversation.groupId });
+      }
+    };
+  }, [socket, connected, conversation, user, remoteUserId]);
 
-				if (response.settings.theme) {
-					const normalizedTheme = normalizeThemePayload(response.settings.theme)
-					if (normalizedTheme) {
-						setActiveTheme(normalizedTheme)
-					}
-				} else {
-					setActiveTheme(CHAT_THEMES[0])
-				}
-			}
-		} catch (error) {
-			console.error('Błąd ładowania ustawień konwersacji:', error)
-		}
-	}
+  // Automatyczne oznaczanie wiadomości jako przeczytane
+  useEffect(() => {
+    if (!socket || !connected || messages.length === 0) return;
 
-	// Przełączanie trybu znikających wiadomości
-	const handleToggleDisappearingMessages = async () => {
-		const newEnabled = !disappearingMessagesEnabled
-		
-		// Optymistyczna aktualizacja UI
-		setDisappearingMessagesEnabled(newEnabled)
-		setMenuLoading(true)
+    // Oznaczenie wszystkich nieprzeczytanych wiadomości jako przeczytane
+    messages.forEach((message) => {
+      if (message.sender_id !== user?.userId) {
+        const isRead = message.readStatuses?.some(
+          (s) => s.user_id === user?.userId && s.is_read,
+        );
+        if (!isRead) {
+          socket.emit("mark_message_read", { messageId: message.message_id });
+        }
+      }
+    });
+  }, [messages, socket, connected, user]);
 
-		try {
-			// Wywołaj API
-			const apiResponse = await messagesApi.toggleDisappearingMessages(conversation.conversationId, newEnabled)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showMenu && !event.target.closest("button")) {
+        setShowMenu(false);
+      }
+    };
 
-			if (apiResponse?.settings) {
-				const settings = apiResponse.settings
-				setDisappearingMessagesEnabled(settings.disappearing_messages_enabled ?? newEnabled)
-				setDisappearingMessagesEnabledAt(settings.disappearing_messages_enabled_at || null)
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [showMenu]);
 
-				if (typeof settings.disappearing_time !== 'undefined') {
-					setDisappearingTime(settings.disappearing_time || null)
-				} else if (!settings.disappearing_messages_enabled) {
-					setDisappearingTime(null)
-				}
-			} else {
-				await loadConversationSettings()
-			}
-			
-			// Emit socket event dla synchronizacji
-			if (socket && connected) {
-				socket.emit('toggle_disappearing_messages', {
-					conversationId: conversation.conversationId,
-					enabled: newEnabled,
-				})
-			}
-			
-			setShowMenu(false)
-		} catch (error) {
-			// Cofnij zmianę przy błędzie
-			setDisappearingMessagesEnabled(!newEnabled)
-			alert('Błąd przełączania trybu: ' + (error.response?.data?.error || error.message))
-		} finally {
-			setMenuLoading(false)
-		}
-	}
+  // Ładowanie wiadomości
+  const loadMessages = async () => {
+    try {
+      setLoading(true);
+      const response = await messagesApi.getMessages(
+        conversation.conversationId,
+      );
+      setMessages(response.messages || []);
+    } catch (error) {
+      console.error("Błąd ładowania wiadomości:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const handleOpenThemeModal = () => {
-		setShowMenu(false)
-		setThemeModalOpen(true)
-	}
+  // Ładowanie ustawień konwersacji
+  const loadConversationSettings = async () => {
+    try {
+      const response = await messagesApi.getConversationSettings(
+        conversation.conversationId,
+      );
+      if (response.success && response.settings) {
+        setDisappearingMessagesEnabled(
+          response.settings.disappearing_messages_enabled || false,
+        );
+        setDisappearingMessagesEnabledAt(
+          response.settings.disappearing_messages_enabled_at || null,
+        );
+        // Użyj czasu znikania użytkownika który włączył tryb (jeśli tryb włączony)
+        if (
+          response.settings.disappearing_messages_enabled &&
+          response.settings.disappearing_time
+        ) {
+          setDisappearingTime(response.settings.disappearing_time);
+        } else {
+          setDisappearingTime(null);
+        }
 
-	const handleCloseThemeModal = () => {
-		if (!themeLoading) {
-			setThemeModalOpen(false)
-		}
-	}
+        if (response.settings.theme) {
+          const normalizedTheme = normalizeThemePayload(
+            response.settings.theme,
+          );
+          if (normalizedTheme) {
+            setActiveTheme(normalizedTheme);
+          }
+        } else {
+          setActiveTheme(CHAT_THEMES[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Błąd ładowania ustawień konwersacji:", error);
+    }
+  };
 
-	const handleThemeSelect = async theme => {
-		if (!theme || theme.key === activeTheme?.key) {
-			setThemeModalOpen(false)
-			return
-		}
+  // Przełączanie trybu znikających wiadomości
+  const handleToggleDisappearingMessages = async () => {
+    const newEnabled = !disappearingMessagesEnabled;
 
-		setThemeLoading(true)
-		try {
-			const response = await messagesApi.setConversationTheme(conversation.conversationId, theme.key)
+    // Optymistyczna aktualizacja UI
+    setDisappearingMessagesEnabled(newEnabled);
+    setMenuLoading(true);
 
-			if (response?.theme) {
-				setActiveTheme(response.theme)
-			}
+    try {
+      // Wywołaj API
+      const apiResponse = await messagesApi.toggleDisappearingMessages(
+        conversation.conversationId,
+        newEnabled,
+      );
 
-			if (response?.systemMessage) {
-				const systemMessage = response.systemMessage
-				addMessageToList({
-					message_id: systemMessage.message_id,
-					conversation_id: conversation.conversationId,
-					sender_id: systemMessage.sender_id,
-					content: systemMessage.content,
-					is_encrypted: false,
-					message_type: systemMessage.message_type || 'system',
-					system_payload: systemMessage.system_payload || null,
-					created_at: systemMessage.created_at,
-					sender: {
-						username: user?.username || 'Ty',
-					},
-					readStatuses: [],
-					files: [],
-				})
-			}
+      if (apiResponse?.settings) {
+        const settings = apiResponse.settings;
+        setDisappearingMessagesEnabled(
+          settings.disappearing_messages_enabled ?? newEnabled,
+        );
+        setDisappearingMessagesEnabledAt(
+          settings.disappearing_messages_enabled_at || null,
+        );
 
-			setThemeModalOpen(false)
-		} catch (error) {
-			console.error('Błąd ustawiania motywu:', error)
-			alert('Nie udało się ustawić motywu: ' + (error.response?.data?.error || error.message))
-		} finally {
-			setThemeLoading(false)
-		}
-	}
+        if (typeof settings.disappearing_time !== "undefined") {
+          setDisappearingTime(settings.disappearing_time || null);
+        } else if (!settings.disappearing_messages_enabled) {
+          setDisappearingTime(null);
+        }
+      } else {
+        await loadConversationSettings();
+      }
 
-	// Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
-	const handleNewMessage = message => {
-		addMessageToList(message)
-	}
+      // Emit socket event dla synchronizacji
+      if (socket && connected) {
+        socket.emit("toggle_disappearing_messages", {
+          conversationId: conversation.conversationId,
+          enabled: newEnabled,
+        });
+      }
 
-	// Usunięcie wiadomości z lokalnego stanu
-	const handleMessageDeleted = messageId => {
-		setMessages(prev => prev.filter(msg => msg.message_id !== messageId))
-	}
+      setShowMenu(false);
+    } catch (error) {
+      // Cofnij zmianę przy błędzie
+      setDisappearingMessagesEnabled(!newEnabled);
+      alert(
+        "Błąd przełączania trybu: " +
+          (error.response?.data?.error || error.message),
+      );
+    } finally {
+      setMenuLoading(false);
+    }
+  };
 
-	// Archiwizacja konwersacji
-	const handleArchiveConversation = async () => {
-		if (!confirm('Czy na pewno chcesz zarchiwizować tę konwersację?')) return
+  const handleOpenThemeModal = () => {
+    setShowMenu(false);
+    setThemeModalOpen(true);
+  };
 
-		try {
-			setMenuLoading(true)
-			await messagesApi.archiveConversation(conversation.conversationId)
-			alert('Konwersacja zarchiwizowana! Znajdziesz ją w archiwum.')
-			setShowMenu(false)
-		} catch (err) {
-			alert('Błąd archiwizacji: ' + (err.response?.data?.error || err.message))
-		} finally {
-			setMenuLoading(false)
-			setter(); // Odśwież listę konwersacji w ChatPage
+  const handleCloseThemeModal = () => {
+    if (!themeLoading) {
+      setThemeModalOpen(false);
+    }
+  };
 
-		}
-	}
+  const handleThemeSelect = async (theme) => {
+    if (!theme || theme.key === activeTheme?.key) {
+      setThemeModalOpen(false);
+      return;
+    }
 
-	// Usunięcie chatu
-	const handleDeleteChat = async () => {
-		if (
-			!confirm('Czy na pewno chcesz usunąć CAŁĄ konwersację? Wszystkie wiadomości zostaną usunięte po Twojej stronie.')
-		)
-			return
+    setThemeLoading(true);
+    try {
+      const response = await messagesApi.setConversationTheme(
+        conversation.conversationId,
+        theme.key,
+      );
 
-		try {
-			setMenuLoading(true)
-			await messagesApi.deleteChat(conversation.conversationId)
-			alert('Konwersacja usunięta po Twojej stronie')
-			setShowMenu(false)
-			setMessages([])
-		} catch (err) {
-			alert('Błąd usuwania: ' + (err.response?.data?.error || err.message))
-		} finally {
-			setMenuLoading(false)
-		}
-	}
+      if (response?.theme) {
+        setActiveTheme(response.theme);
+      }
 
-	const handleExportConversation = async () => {
-		try {
-			setMenuLoading(true)
-			const response = await messagesApi.exportConversation(conversation.conversationId)
+      if (response?.systemMessage) {
+        const systemMessage = response.systemMessage;
+        addMessageToList({
+          message_id: systemMessage.message_id,
+          conversation_id: conversation.conversationId,
+          sender_id: systemMessage.sender_id,
+          content: systemMessage.content,
+          is_encrypted: false,
+          message_type: systemMessage.message_type || "system",
+          system_payload: systemMessage.system_payload || null,
+          created_at: systemMessage.created_at,
+          sender: {
+            username: user?.username || "Ty",
+          },
+          readStatuses: [],
+          files: [],
+        });
+      }
 
-			const dataStr = JSON.stringify(response.data, null, 2)
-			const dataBlob = new Blob([dataStr], { type: 'application/json' })
-			const url = URL.createObjectURL(dataBlob)
+      setThemeModalOpen(false);
+    } catch (error) {
+      console.error("Błąd ustawiania motywu:", error);
+      alert(
+        "Nie udało się ustawić motywu: " +
+          (error.response?.data?.error || error.message),
+      );
+    } finally {
+      setThemeLoading(false);
+    }
+  };
 
-			const link = document.createElement('a')
-			link.href = url
-			link.download = `chat-${conversation.name}-${Date.now()}.json`
-			document.body.appendChild(link)
-			link.click()
-			document.body.removeChild(link)
-			URL.revokeObjectURL(url)
+  // Optymistyczne dodanie wiadomości (zanim przyjdzie przez socket)
+  const handleNewMessage = (message) => {
+    addMessageToList(message);
+  };
 
-			alert('Konwersacja wyeksportowana!')
-			setShowMenu(false)
-		} catch (err) {
-			alert('Błąd eksportu: ' + (err.response?.data?.error || err.message))
-		} finally {
-			setMenuLoading(false)
-		}
-	}
+  // Usunięcie wiadomości z lokalnego stanu
+  const handleMessageDeleted = (messageId) => {
+    setMessages((prev) => prev.filter((msg) => msg.message_id !== messageId));
+  };
 
-	return (
-		<div
-			style={{
-				display: 'flex',
-				flexDirection: 'column',
-				height: '100%',
-				backgroundColor: themeVariables.backgroundColor || 'var(--chat-background)',
-				backgroundImage: themeVariables.backgroundImage || 'none',
-				backgroundSize: 'cover',
-				backgroundPosition: 'center',
-				transition: 'background 0.3s ease',
-			}}>
-			{/* Header */}
-			<div
-				style={{
-					padding: '15px',
-					borderBottom: `1px solid ${headerBorderColor}`,
-					backgroundColor: headerBackgroundColor,
-					backdropFilter: 'blur(6px)',
-					position: 'sticky',
-					top: 0,
-					zIndex: 100,
-					display: 'flex',
-					justifyContent: 'space-between',
-					alignItems: 'center',
-					color: headerTextColor,
-				}}>
-				<div>
-					<h3 style={{ margin: 0, color: headerTextColor }}>
-						{conversation.type === 'group' ? '👥' : '💬'} {conversation.name}
-					</h3>
-					<p style={{ margin: '5px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-						{conversation.type === 'group' ? 'Grupa' : 'Rozmowa prywatna'}
-						{connected ? (
-							<span style={{ color: accentColor, marginLeft: '6px' }}>• 🟢 Online</span>
-						) : (
-							<span style={{ color: 'var(--color-danger)', marginLeft: '6px' }}>• 🔴 Offline</span>
-						)}
-					</p>
-				</div>
+  // Archiwizacja konwersacji
+  const handleArchiveConversation = async () => {
+    if (!confirm("Czy na pewno chcesz zarchiwizować tę konwersację?")) return;
 
-				{/* Menu dropdown */}
-				<div style={{ position: 'relative' }}>
-					<button
-						onClick={() => setShowMenu(!showMenu)}
-						disabled={menuLoading}
-						style={{
-							padding: '8px 12px',
-							backgroundColor: menuBackgroundColor,
-							border: `1px solid ${menuBorderColor}`,
-							borderRadius: '5px',
-							cursor: menuLoading ? 'not-allowed' : 'pointer',
-							fontSize: '18px',
-							color: accentColor,
-						}}
-						title="Opcje">
-						⋮
-					</button>
+    try {
+      setMenuLoading(true);
+      await messagesApi.archiveConversation(conversation.conversationId);
+      alert("Konwersacja zarchiwizowana! Znajdziesz ją w archiwum.");
+      setShowMenu(false);
+    } catch (err) {
+      alert("Błąd archiwizacji: " + (err.response?.data?.error || err.message));
+    } finally {
+      setMenuLoading(false);
+      setter(); // Odśwież listę konwersacji w ChatPage
+    }
+  };
 
-					{showMenu && (
-						<div
-							style={{
-								position: 'absolute',
-								top: '100%',
-								right: 0,
-								marginTop: '5px',
-								backgroundColor: menuBackgroundColor,
-								border: `1px solid ${menuBorderColor}`,
-								borderRadius: '8px',
-								boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-								zIndex: 2000,
-								minWidth: '200px',
-								overflow: 'hidden',
-								color: menuTextColor,
-							}}>
-							<button
-								onClick={handleOpenThemeModal}
-								disabled={menuLoading || themeLoading}
-								style={{
-									width: '100%',
-									padding: '12px 16px',
-									border: 'none',
-									backgroundColor: menuBackgroundColor,
-									textAlign: 'left',
-									cursor: menuLoading || themeLoading ? 'not-allowed' : 'pointer',
-									fontSize: '14px',
-									borderBottom: `1px solid ${menuBorderColor}`,
-									color: menuTextColor,
-								}}
-								onMouseEnter={handleMenuItemEnter}
-								onMouseLeave={handleMenuItemLeave}>
-								🎨 Zmień motyw
-							</button>
+  // Usunięcie chatu
+  const handleDeleteChat = async () => {
+    if (
+      !confirm(
+        "Czy na pewno chcesz usunąć CAŁĄ konwersację? Wszystkie wiadomości zostaną usunięte po Twojej stronie.",
+      )
+    )
+      return;
 
-							{/* <button
+    try {
+      setMenuLoading(true);
+      await messagesApi.deleteChat(conversation.conversationId);
+      alert("Konwersacja usunięta po Twojej stronie");
+      setShowMenu(false);
+      setMessages([]);
+    } catch (err) {
+      alert("Błąd usuwania: " + (err.response?.data?.error || err.message));
+    } finally {
+      setMenuLoading(false);
+    }
+  };
+
+  const handleExportConversation = async () => {
+    try {
+      setMenuLoading(true);
+      const response = await messagesApi.exportConversation(
+        conversation.conversationId,
+      );
+
+      const dataStr = JSON.stringify(response.data, null, 2);
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `chat-${conversation.name}-${Date.now()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert("Konwersacja wyeksportowana!");
+      setShowMenu(false);
+    } catch (err) {
+      alert("Błąd eksportu: " + (err.response?.data?.error || err.message));
+    } finally {
+      setMenuLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        backgroundColor:
+          themeVariables.backgroundColor || "var(--chat-background)",
+        backgroundImage: themeVariables.backgroundImage || "none",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        transition: "background 0.3s ease",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: "15px",
+          borderBottom: `1px solid ${headerBorderColor}`,
+          backgroundColor: headerBackgroundColor,
+          backdropFilter: "blur(6px)",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          color: headerTextColor,
+        }}
+      >
+        <div>
+          <h3 style={{ margin: 0, color: headerTextColor }}>
+            {conversation.type === "group" ? "👥" : "💬"} {conversation.name}
+          </h3>
+          <p
+            style={{
+              margin: "5px 0 0 0",
+              fontSize: "12px",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            {conversation.type === "group" ? "Grupa" : "Rozmowa prywatna"}
+            {connected ? (
+              <span style={{ color: accentColor, marginLeft: "6px" }}>
+                • 🟢 Online
+              </span>
+            ) : (
+              <span style={{ color: "var(--color-danger)", marginLeft: "6px" }}>
+                • 🔴 Offline
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* Przyciski do połączeń wideo/audio - tylko dla prywatnych konwersacji */}
+        {conversation.type === "private" && remoteUserId && (
+          <div style={{ display: "flex", gap: "8px", marginRight: "10px" }}>
+            <button
+              onClick={() => {
+                setCallType("video");
+                setShowVideoCall(true);
+              }}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: accentColor,
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+                fontSize: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+              title="Rozpocznij rozmowę wideo"
+            >
+              📹
+            </button>
+            <button
+              onClick={() => {
+                setCallType("audio");
+                setShowVideoCall(true);
+              }}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: accentColor,
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer",
+                fontSize: "16px",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+              title="Rozpocznij rozmowę głosową"
+            >
+              📞
+            </button>
+          </div>
+        )}
+
+        {/* Menu dropdown */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            disabled={menuLoading}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: menuBackgroundColor,
+              border: `1px solid ${menuBorderColor}`,
+              borderRadius: "5px",
+              cursor: menuLoading ? "not-allowed" : "pointer",
+              fontSize: "18px",
+              color: accentColor,
+            }}
+            title="Opcje"
+          >
+            ⋮
+          </button>
+
+          {showMenu && (
+            <div
+              style={{
+                position: "absolute",
+                top: "100%",
+                right: 0,
+                marginTop: "5px",
+                backgroundColor: menuBackgroundColor,
+                border: `1px solid ${menuBorderColor}`,
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                zIndex: 2000,
+                minWidth: "200px",
+                overflow: "hidden",
+                color: menuTextColor,
+              }}
+            >
+              <button
+                onClick={handleOpenThemeModal}
+                disabled={menuLoading || themeLoading}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "none",
+                  backgroundColor: menuBackgroundColor,
+                  textAlign: "left",
+                  cursor:
+                    menuLoading || themeLoading ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  borderBottom: `1px solid ${menuBorderColor}`,
+                  color: menuTextColor,
+                }}
+                onMouseEnter={handleMenuItemEnter}
+                onMouseLeave={handleMenuItemLeave}
+              >
+                🎨 Zmień motyw
+              </button>
+
+              {/* <button
 								onClick={handleExportConversation}
 								disabled={menuLoading}
 								style={{
@@ -662,149 +846,383 @@ const ChatWindow = ({ conversation, setter }) => {
 								📥 Eksportuj do JSON
 							</button> */}
 
-							<button
-								onClick={handleToggleDisappearingMessages}
-								disabled={menuLoading}
-								style={{
-									width: '100%',
-									padding: '12px 16px',
-									border: 'none',
-									backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : menuBackgroundColor,
-									textAlign: 'left',
-									cursor: menuLoading ? 'not-allowed' : 'pointer',
-									fontSize: '14px',
-									borderBottom: `1px solid ${menuBorderColor}`,
-									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'space-between',
-									color: disappearingMessagesEnabled ? 'var(--button-success-text)' : menuTextColor,
-								}}
-								onMouseEnter={handleMenuItemEnter}
-								onMouseLeave={handleMenuItemLeave}>
-								<span>⏱️ Znikające wiadomości</span>
-								<span
-									style={{
-										width: '40px',
-										height: '20px',
-										backgroundColor: disappearingMessagesEnabled ? 'var(--button-success-bg)' : 'var(--color-border)',
-										borderRadius: '10px',
-										position: 'relative',
-										transition: 'background-color 0.2s',
-									}}
-								>
-									<span
-										style={{
-											position: 'absolute',
-											width: '16px',
-											height: '16px',
-											backgroundColor: 'var(--color-surface)',
-											borderRadius: '50%',
-											top: '2px',
-											left: disappearingMessagesEnabled ? '22px' : '2px',
-											transition: 'left 0.2s',
-											boxShadow: 'var(--shadow-sm)',
-										}}
-									/>
-								</span>
-							</button>
+              <button
+                onClick={handleToggleDisappearingMessages}
+                disabled={menuLoading}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "none",
+                  backgroundColor: disappearingMessagesEnabled
+                    ? "var(--button-success-bg)"
+                    : menuBackgroundColor,
+                  textAlign: "left",
+                  cursor: menuLoading ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  borderBottom: `1px solid ${menuBorderColor}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  color: disappearingMessagesEnabled
+                    ? "var(--button-success-text)"
+                    : menuTextColor,
+                }}
+                onMouseEnter={handleMenuItemEnter}
+                onMouseLeave={handleMenuItemLeave}
+              >
+                <span>⏱️ Znikające wiadomości</span>
+                <span
+                  style={{
+                    width: "40px",
+                    height: "20px",
+                    backgroundColor: disappearingMessagesEnabled
+                      ? "var(--button-success-bg)"
+                      : "var(--color-border)",
+                    borderRadius: "10px",
+                    position: "relative",
+                    transition: "background-color 0.2s",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      width: "16px",
+                      height: "16px",
+                      backgroundColor: "var(--color-surface)",
+                      borderRadius: "50%",
+                      top: "2px",
+                      left: disappearingMessagesEnabled ? "22px" : "2px",
+                      transition: "left 0.2s",
+                      boxShadow: "var(--shadow-sm)",
+                    }}
+                  />
+                </span>
+              </button>
 
-							<button
-								onClick={handleArchiveConversation}
-								disabled={menuLoading}
-								style={{
-									width: '100%',
-									padding: '12px 16px',
-									border: 'none',
-									backgroundColor: menuBackgroundColor,
-									textAlign: 'left',
-									cursor: menuLoading ? 'not-allowed' : 'pointer',
-									fontSize: '14px',
-									borderBottom: `1px solid ${menuBorderColor}`,
-									color: menuTextColor,
-								}}
-								onMouseEnter={handleMenuItemEnter}
-								onMouseLeave={handleMenuItemLeave}>
-								📦 Archiwizuj konwersację
-							</button>
+              <button
+                onClick={handleArchiveConversation}
+                disabled={menuLoading}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "none",
+                  backgroundColor: menuBackgroundColor,
+                  textAlign: "left",
+                  cursor: menuLoading ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  borderBottom: `1px solid ${menuBorderColor}`,
+                  color: menuTextColor,
+                }}
+                onMouseEnter={handleMenuItemEnter}
+                onMouseLeave={handleMenuItemLeave}
+              >
+                📦 Archiwizuj konwersację
+              </button>
 
-							<button
-								onClick={handleDeleteChat}
-								disabled={menuLoading}
-								style={{
-									width: '100%',
-									padding: '12px 16px',
-									border: 'none',
-									backgroundColor: menuBackgroundColor,
-									textAlign: 'left',
-									cursor: menuLoading ? 'not-allowed' : 'pointer',
-									fontSize: '14px',
-									color: 'var(--color-danger)',
-								}}
-								onMouseEnter={handleMenuItemEnter}
-								onMouseLeave={handleMenuItemLeave}>
-								🗑️ Usuń całą konwersację
-							</button>
-						</div>
-					)}
-				</div>
-			</div>
+              <button
+                onClick={handleDeleteChat}
+                disabled={menuLoading}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  border: "none",
+                  backgroundColor: menuBackgroundColor,
+                  textAlign: "left",
+                  cursor: menuLoading ? "not-allowed" : "pointer",
+                  fontSize: "14px",
+                  color: "var(--color-danger)",
+                }}
+                onMouseEnter={handleMenuItemEnter}
+                onMouseLeave={handleMenuItemLeave}
+              >
+                🗑️ Usuń całą konwersację
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
-			{/* Messages */}
-			{loading ? (
-				<div
-					style={{
-						flex: 1,
-						display: 'flex',
-						justifyContent: 'center',
-						alignItems: 'center',
-					}}>
-					<p>Ładowanie wiadomości...</p>
-				</div>
-			) : (
-				<>
-					{/* Baner znikających wiadomości */}
-					{disappearingMessagesEnabled && disappearingTime && (
-						<DisappearingMessagesBanner disappearingTime={disappearingTime} />
-					)}
-					<MessageList
-						messages={messages}
-						conversation={conversation}
-						onMessageDeleted={handleMessageDeleted}
-						disappearingMessagesEnabled={disappearingMessagesEnabled}
-						disappearingMessagesEnabledAt={disappearingMessagesEnabledAt}
-						disappearingTime={disappearingTime}
-						activeTheme={activeTheme}
-					/>
+      {/* Messages */}
+      {loading ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <p>Ładowanie wiadomości...</p>
+        </div>
+      ) : (
+        <>
+          {/* Baner znikających wiadomości */}
+          {disappearingMessagesEnabled && disappearingTime && (
+            <DisappearingMessagesBanner disappearingTime={disappearingTime} />
+          )}
+          <MessageList
+            messages={messages}
+            conversation={conversation}
+            onMessageDeleted={handleMessageDeleted}
+            disappearingMessagesEnabled={disappearingMessagesEnabled}
+            disappearingMessagesEnabledAt={disappearingMessagesEnabledAt}
+            disappearingTime={disappearingTime}
+            activeTheme={activeTheme}
+          />
 
-					{/* Wskaźnik pisania */}
-					{typingUsers.length > 0 && (
-						<div
-							style={{
-								padding: '10px 20px',
-								fontSize: '12px',
-								color: 'var(--color-text-muted)',
-								fontStyle: 'italic',
-								backgroundColor: typingBackgroundColor,
-							}}>
-							{typingUsers.map(u => u.username).join(', ')} {typingUsers.length === 1 ? 'pisze' : 'piszą'}...
-						</div>
-					)}
-				</>
-			)}
+          {/* Wskaźnik pisania */}
+          {typingUsers.length > 0 && (
+            <div
+              style={{
+                padding: "10px 20px",
+                fontSize: "12px",
+                color: "var(--color-text-muted)",
+                fontStyle: "italic",
+                backgroundColor: typingBackgroundColor,
+              }}
+            >
+              {typingUsers.map((u) => u.username).join(", ")}{" "}
+              {typingUsers.length === 1 ? "pisze" : "piszą"}...
+            </div>
+          )}
+        </>
+      )}
 
-			{/* Input */}
-			<MessageInput conversation={conversation} onMessageSent={handleNewMessage} themeVariables={themeVariables} />
+      {/* Input */}
+      <MessageInput
+        conversation={conversation}
+        onMessageSent={handleNewMessage}
+        themeVariables={themeVariables}
+      />
 
-			<ThemePickerModal
-				isOpen={themeModalOpen}
-				onClose={handleCloseThemeModal}
-				themes={availableThemes}
-				selectedThemeKey={activeTheme?.key}
-				onSelect={handleThemeSelect}
-				isSaving={themeLoading}
-			/>
-		</div>
-	)
-}
+      <ThemePickerModal
+        isOpen={themeModalOpen}
+        onClose={handleCloseThemeModal}
+        themes={availableThemes}
+        selectedThemeKey={activeTheme?.key}
+        onSelect={handleThemeSelect}
+        isSaving={themeLoading}
+      />
 
-export default ChatWindow
+      {/* Komponent rozmowy wideo/audio - renderowany zawsze dla prywatnych konwersacji, aby obsłużyć przychodzące połączenia */}
+      {conversation.type === "private" && remoteUserId && (
+        <VideoCallContainer
+          conversation={conversation}
+          remoteUserId={remoteUserId}
+          callType={callType}
+          shouldInitiateCall={showVideoCall}
+          onClose={() => {
+            setShowVideoCall(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Komponent wrapper do VideoCall z obsługą startu połączenia
+const VideoCallContainer = ({
+  conversation,
+  remoteUserId,
+  callType,
+  shouldInitiateCall,
+  onClose,
+}) => {
+  const { socket } = useSocket();
+  const { user } = useAuth();
+  const {
+    isCallActive,
+    isIncomingCall,
+    isCalling,
+    callType: activeCallType,
+    callState,
+    localVideoRef,
+    remoteVideoRef,
+    startCall,
+    acceptCall,
+    rejectCall,
+    endCall,
+    toggleMute,
+    toggleVideo,
+    audioDevices,
+    videoDevices,
+    outputDevices,
+    selectedAudioDevice,
+    selectedVideoDevice,
+    selectedOutputDevice,
+    isAudioMuted,
+    isVideoMuted,
+    changeAudioDevice,
+    changeVideoDevice,
+    changeOutputDevice,
+    networkQuality,
+    connectionStats,
+  } = useWebRTC(
+    socket,
+    user?.userId,
+    remoteUserId,
+    conversation?.conversationId,
+  );
+
+  // Używamy useRef zamiast useState aby zapobiec wielokrotnym wywołaniom
+  const hasStartedCallRef = useRef(false);
+  const callTypeRef = useRef(null);
+
+  // Reset przy zmianie konwersacji
+  useEffect(() => {
+    return () => {
+      hasStartedCallRef.current = false;
+      callTypeRef.current = null;
+    };
+  }, [conversation?.conversationId]);
+
+  // Automatyczne rozpoczęcie połączenia gdy użytkownik kliknie przycisk
+  useEffect(() => {
+    if (
+      shouldInitiateCall &&
+      !hasStartedCallRef.current &&
+      !isCalling &&
+      !isCallActive &&
+      !isIncomingCall &&
+      callType
+    ) {
+      console.log("🎬 Initiating call, type:", callType);
+      hasStartedCallRef.current = true;
+      callTypeRef.current = callType;
+
+      startCall(callType).catch((error) => {
+        console.error("❌ Błąd rozpoczęcia połączenia:", error);
+        // Komunikat błędu jest już wyświetlony w getLocalStream
+        // Zamknij komponent po krótkim opóźnieniu, aby użytkownik widział komunikat
+        setTimeout(() => {
+          hasStartedCallRef.current = false;
+          callTypeRef.current = null;
+          onClose?.();
+        }, 2000);
+      });
+    }
+  }, [
+    shouldInitiateCall,
+    callType,
+    startCall,
+    isCalling,
+    isCallActive,
+    isIncomingCall,
+    onClose,
+  ]);
+
+  // Reset hasStartedCall gdy połączenie się zakończy
+  useEffect(() => {
+    if (callState === "idle" || callState === "ended") {
+      if (hasStartedCallRef.current) {
+        console.log("🔄 Resetting call initiation flag");
+      }
+      hasStartedCallRef.current = false;
+      callTypeRef.current = null;
+    }
+  }, [callState]);
+
+  // Automatyczne zamknięcie po zakończeniu połączenia
+  useEffect(() => {
+    if (callState === "ended" || callState === "idle") {
+      // Jeśli połączenie zostało zakończone i nie ma aktywnych stanów
+      if (!isCallActive && !isIncomingCall && !isCalling) {
+        const timer = setTimeout(() => {
+          console.log("🔴 Closing video call container");
+          hasStartedCallRef.current = false;
+          callTypeRef.current = null;
+          onClose?.();
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [callState, isCallActive, isIncomingCall, isCalling, onClose]);
+
+  // Cleanup przy odmontowaniu
+  useEffect(() => {
+    return () => {
+      if (isCallActive || isCalling || isIncomingCall) {
+        console.log("🧹 VideoCallContainer unmounting - cleaning up");
+        endCall();
+      }
+    };
+  }, []);
+
+  // Debug logging
+  useEffect(() => {
+    console.log("📊 VideoCallContainer state:", {
+      shouldInitiateCall,
+      hasStartedCall: hasStartedCallRef.current,
+      isCallActive,
+      isIncomingCall,
+      isCalling,
+      callState,
+      callType: activeCallType || callType,
+    });
+  }, [
+    shouldInitiateCall,
+    isCallActive,
+    isIncomingCall,
+    isCalling,
+    callState,
+    activeCallType,
+    callType,
+  ]);
+
+  // Renderuj VideoCall gdy jest aktywny call (rozpoczynany, przychodzący lub połączony)
+  // LUB gdy użytkownik właśnie kliknął przycisk (shouldInitiateCall) - aby pokazać planszę podczas uzyskiwania dostępu do mediów
+  const shouldRender =
+    isCallActive || isIncomingCall || isCalling || shouldInitiateCall;
+
+  if (!shouldRender) {
+    return null;
+  }
+
+  return (
+    <VideoCall
+      conversation={conversation}
+      remoteUserId={remoteUserId}
+      isCallActive={isCallActive}
+      isIncomingCall={isIncomingCall}
+      isCalling={isCalling}
+      callType={activeCallType || callType}
+      callState={callState}
+      localVideoRef={localVideoRef}
+      remoteVideoRef={remoteVideoRef}
+      acceptCall={acceptCall}
+      rejectCall={() => {
+        rejectCall();
+        onClose?.();
+      }}
+      endCall={() => {
+        endCall();
+        // onClose będzie wywołane automatycznie przez useEffect monitorujący callState
+      }}
+      toggleMute={toggleMute}
+      toggleVideo={toggleVideo}
+      onClose={onClose}
+      isInitiating={
+        shouldInitiateCall &&
+        hasStartedCallRef.current &&
+        !isCalling &&
+        !isCallActive &&
+        !isIncomingCall
+      }
+      audioDevices={audioDevices}
+      videoDevices={videoDevices}
+      outputDevices={outputDevices}
+      selectedAudioDevice={selectedAudioDevice}
+      selectedVideoDevice={selectedVideoDevice}
+      selectedOutputDevice={selectedOutputDevice}
+      isAudioMuted={isAudioMuted}
+      isVideoMuted={isVideoMuted}
+      changeAudioDevice={changeAudioDevice}
+      changeVideoDevice={changeVideoDevice}
+      changeOutputDevice={changeOutputDevice}
+      networkQuality={networkQuality}
+      connectionStats={connectionStats}
+    />
+  );
+};
+
+export default ChatWindow;
